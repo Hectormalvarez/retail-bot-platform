@@ -1,6 +1,5 @@
 # Security & Environments
 .env
-.env.*
 venv/
 env/
 
