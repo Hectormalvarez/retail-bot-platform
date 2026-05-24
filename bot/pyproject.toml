@@ -36,4 +36,5 @@ asyncio_mode = "auto"
 testpaths = ["bot"]
 
 [tool.setuptools]
+packages = ["handlers"]
 py-modules = ["main"]
