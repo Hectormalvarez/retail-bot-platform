@@ -1,6 +1,6 @@
 # Retail Bot Platform
 
-A multi-tenant, headless e-commerce engine controlled via Telegram.
+A single-tenant, headless e-commerce engine controlled via Telegram.
 
 ## Architecture
 

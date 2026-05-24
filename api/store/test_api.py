@@ -2,6 +2,7 @@ import pytest
 from rest_framework.test import APIClient
 from store.models import Category
 
+
 @pytest.mark.django_db
 def test_catalog_api_flow():
     client = APIClient()
@@ -15,7 +16,7 @@ def test_catalog_api_flow():
         "description": "High quality cotton tee",
         "price": "25.00",
         "stock": 100,
-        "category": category.id
+        "category": category.id,
     }
     response = client.post("/api/products/", product_payload, format="json")
     assert response.status_code == 201
