@@ -26,3 +26,23 @@ def test_catalog_api_flow():
     get_response = client.get(f"/api/products/?category={category.id}")
     assert get_response.status_code == 200
     assert len(get_response.data) == 1
+
+
+@pytest.mark.django_db
+def test_user_synchronization_endpoint():
+    from rest_framework.test import APIClient
+
+    client = APIClient()
+    user_payload = {
+        "telegram_id": 999888777,
+        "username": "test_shopper",
+        "first_name": "Hector",
+    }
+    # Test creation
+    res = client.post("/api/users/", user_payload, format="json")
+    assert res.status_code == 201
+
+    # Test retrieval using lookup_field
+    get_res = client.get("/api/users/999888777/")
+    assert get_res.status_code == 200
+    assert get_res.data["username"] == "test_shopper"

@@ -1,5 +1,6 @@
 import logging
 import os
+
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -14,8 +15,30 @@ async def fetch_products():
             response = await client.get(f"{API_BASE_URL}products/")
             response.raise_for_status()
             data = response.json()
-            logger.info(f"API payload successfully retrieved: {len(data)} items found.")
+            logger.info(f"Retrieved {len(data)} items from catalog.")
             return data
         except httpx.HTTPError as exc:
             logger.error(f"API gateway connection failure: {exc}")
             return []
+
+
+async def sync_user(user_data: dict):
+    """Saves or updates a user profile instantly inside PostgreSQL."""
+    tg_id = user_data["telegram_id"]
+    async with httpx.AsyncClient() as client:
+        try:
+            url = f"{API_BASE_URL}users/{tg_id}/"
+            res = await client.get(url)
+
+            if res.status_code == 404:
+                # User does not exist yet -> Create record
+                post_res = await client.post(f"{API_BASE_URL}users/", json=user_data)
+                post_res.raise_for_status()
+                logger.info(f"Registered new shopper profile: {tg_id}")
+            else:
+                # User profile exists -> Patch any changes (e.g. updated username)
+                patch_res = await client.patch(url, json=user_data)
+                patch_res.raise_for_status()
+                logger.info(f"Synchronized existing profile changes: {tg_id}")
+        except httpx.HTTPError as exc:
+            logger.error(f"Failed to sync user context {tg_id}: {exc}")

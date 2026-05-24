@@ -1,14 +1,14 @@
 import logging
 import os
+
 from dotenv import load_dotenv
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-from api_client import fetch_products
+from api_client import fetch_products, sync_user
 
 load_dotenv()
 
-# Setup explicit container terminal formatting
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
@@ -16,17 +16,29 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def extract_user_context(update: Update) -> dict:
+    """Helper to cleanly extract Telegram user metadata."""
     user = update.effective_user
-    logger.info(f"User {user.id} ({user.username}) initiated /start")
+    return {
+        "telegram_id": user.id,
+        "username": user.username,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+    }
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_ctx = extract_user_context(update)
+    await sync_user(user_ctx)
+
     text = "Welcome to the Retail Bot! Use /catalog to view active items."
     await update.message.reply_text(text)
 
 
 async def catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Queries the API container and renders interactive menus."""
-    user = update.effective_user
-    logger.info(f"User {user.id} requested product catalog view.")
+    user_ctx = extract_user_context(update)
+    await sync_user(user_ctx)
 
     products = await fetch_products()
 
@@ -59,5 +71,5 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("catalog", catalog))
 
-    logger.info("Initializing Telegram polling polling interface...")
+    logger.info("Initializing Telegram polling interface...")
     app.run_polling()
