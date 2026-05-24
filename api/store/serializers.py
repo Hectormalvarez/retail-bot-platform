@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Category, Product, TelegramUser
+from .models import Cart, CartItem, Category, Product, TelegramUser
 
 
 class TelegramUserSerializer(serializers.ModelSerializer):
@@ -36,3 +36,36 @@ class ProductSerializer(serializers.ModelSerializer):
             "category",
             "category_name",
         ]
+
+
+class CartItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.ReadOnlyField(source="product.name")
+    unit_price = serializers.ReadOnlyField(source="product.price")
+    subtotal = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CartItem
+        fields = [
+            "id",
+            "cart",
+            "product",
+            "product_name",
+            "unit_price",
+            "quantity",
+            "subtotal",
+        ]
+
+    def get_subtotal(self, obj):
+        return obj.product.price * obj.quantity
+
+
+class CartSerializer(serializers.ModelSerializer):
+    items = CartItemSerializer(many=True, read_only=True)
+    cart_total = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Cart
+        fields = ["id", "user", "updated_at", "items", "cart_total"]
+
+    def get_cart_total(self, obj):
+        return sum(item.product.price * item.quantity for item in obj.items.all())
