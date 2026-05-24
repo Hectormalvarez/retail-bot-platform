@@ -4,6 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
     "python-telegram-bot>=21.0",
+    "python-dotenv",
 ]
 
 [project.optional-dependencies]
@@ -32,3 +33,6 @@ ignore = []
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["bot"]
+
+[tool.setuptools]
+py-modules = ["main"]

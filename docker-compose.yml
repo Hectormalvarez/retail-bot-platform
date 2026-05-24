@@ -4,10 +4,10 @@ services:
       context: ./bot
     container_name: retail_bot
     restart: unless-stopped
-    networks:
-      - retail_mesh
     env_file:
       - .env
+    networks:
+      - retail_mesh
 
 networks:
   retail_mesh:
