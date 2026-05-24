@@ -21,6 +21,9 @@ jobs:
         
       - name: Lint Bot
         run: ruff check bot/
+
+      - name: Format Check Bot
+        run: ruff format --check bot/
         
       - name: Run Bot Tests
         run: pytest bot/
@@ -41,6 +44,9 @@ jobs:
         
       - name: Lint API
         run: ruff check api/
+
+      - name: Format Check API
+        run: ruff format --check api/
         
       - name: Run API Tests
         run: pytest api/
