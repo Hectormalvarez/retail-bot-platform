@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 import os
+import sys
 
 from pathlib import Path
 
@@ -39,8 +40,15 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "django_filters",
     "store",
 ]
+
+REST_FRAMEWORK = {
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
+    ],
+}
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -75,16 +83,25 @@ WSGI_APPLICATION = "core.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("POSTGRES_DB", "retail_core"),
-        "USER": os.getenv("POSTGRES_USER", "retail_admin"),
-        "PASSWORD": os.getenv("POSTGRES_PASSWORD", ""),
-        "HOST": "db",
-        "PORT": "5432",
+# Dynamic database routing: use SQLite for testing environments, Postgres for runtime mesh
+if "test" in sys.argv or "pytest" in sys.modules:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("POSTGRES_DB", "retail_core"),
+            "USER": os.getenv("POSTGRES_USER", "retail_admin"),
+            "PASSWORD": os.getenv("POSTGRES_PASSWORD", ""),
+            "HOST": "db",
+            "PORT": "5432",
+        }
+    }
 
 
 # Password validation
@@ -122,3 +139,4 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = "static/"
+

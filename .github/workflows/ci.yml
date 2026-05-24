@@ -5,17 +5,42 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-  test:
+  test-bot:
+    name: Bot Engine Suite
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: Install dependencies
+          
+      - name: Install Bot Dependencies
         run: pip install -e "bot/.[dev]"
-      - name: Lint
-        run: ruff check .
-      - name: Test
-        run: pytest
+        
+      - name: Lint Bot
+        run: ruff check bot/
+        
+      - name: Run Bot Tests
+        run: pytest bot/
+
+  test-api:
+    name: Django API Gateway Suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          
+      - name: Install API Dependencies
+        run: pip install "./api[dev]"
+        
+      - name: Lint API
+        run: ruff check api/
+        
+      - name: Run API Tests
+        run: pytest api/

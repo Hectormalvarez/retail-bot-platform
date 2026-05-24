@@ -5,8 +5,20 @@ requires-python = ">=3.13"
 dependencies = [
     "django>=5.0.0",
     "djangorestframework>=3.15.0",
+    "django-filter>=24.0",
     "psycopg[binary]>=3.1.0",
+    "pytest>=8.0.0",
+    "pytest-django>=4.8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff",
 ]
 
 [tool.setuptools]
-packages = ["core"]
+packages = ["core", "store"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "core.settings"
+python_files = ["test_*.py", "*_test.py"]

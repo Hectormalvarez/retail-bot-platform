@@ -1,7 +1,11 @@
 FROM python:3.13-slim AS builder
 WORKDIR /app
+
+# Copy configuration and create a dummy package structure for metadata generation
 COPY pyproject.toml .
-RUN mkdir core && touch core/__init__.py
+RUN mkdir core store && touch core/__init__.py store/__init__.py
+
+# Install dependencies cleanly
 RUN pip install --user --no-cache-dir .
 
 FROM python:3.13-slim
