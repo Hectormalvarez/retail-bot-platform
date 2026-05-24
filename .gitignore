@@ -1,0 +1,13 @@
+# Security & Environments
+.env
+.env.*
+venv/
+env/
+
+# Python Runtime
+__pycache__/
+*.py[cod]
+
+# Testing & Linting
+.pytest_cache/
+.ruff_cache/
