@@ -42,3 +42,17 @@ async def sync_user(user_data: dict):
                 logger.info(f"Synchronized existing profile changes: {tg_id}")
         except httpx.HTTPError as exc:
             logger.error(f"Failed to sync user context {tg_id}: {exc}")
+
+
+async def fetch_product_detail(product_id: int):
+    """Fetches a single product's details from the DRF gateway."""
+    logger.info(f"Fetching details for product ID: {product_id}")
+    async with httpx.AsyncClient() as client:
+        try:
+            url = f"{API_BASE_URL}products/{product_id}/"
+            response = await client.get(url)
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as exc:
+            logger.error(f"Failed to fetch product {product_id}: {exc}")
+            return None

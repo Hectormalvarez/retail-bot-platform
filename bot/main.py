@@ -29,6 +29,9 @@ if __name__ == "__main__":
     app.add_handler(
         CallbackQueryHandler(catalog.view_product_detail, pattern=r"^view_prod_\d+$")
     )
+    app.add_handler(
+        CallbackQueryHandler(catalog.back_to_catalog, pattern=r"^back_catalog$")
+    )
 
     logger.info("Initializing modular Telegram bot routing map...")
     app.run_polling()
