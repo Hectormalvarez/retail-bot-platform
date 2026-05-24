@@ -21,18 +21,18 @@ if __name__ == "__main__":
 
     app = ApplicationBuilder().token(token).build()
 
-    # Commands Registered via package modules
     app.add_handler(CommandHandler("start", common.start))
     app.add_handler(CommandHandler("catalog", catalog.catalog_command))
     app.add_handler(CommandHandler("cart", cart.cart_command))
 
-    # Pattern-matched callback routing via framework layer
     app.add_handler(
         CallbackQueryHandler(catalog.view_product_detail, pattern=r"^view_prod_\d+$")
     )
     app.add_handler(
         CallbackQueryHandler(catalog.back_to_catalog, pattern=r"^back_catalog$")
     )
+    app.add_handler(CallbackQueryHandler(common.back_to_start, pattern=r"^back_start$"))
+    app.add_handler(CallbackQueryHandler(cart.cart_command, pattern=r"^view_cart_nav$"))
     app.add_handler(
         CallbackQueryHandler(cart.add_to_cart_handler, pattern=r"^add_to_cart_\d+$")
     )
@@ -43,5 +43,4 @@ if __name__ == "__main__":
     )
 
     logger.info("Initializing modular Telegram bot routing map...")
-
     app.run_polling()

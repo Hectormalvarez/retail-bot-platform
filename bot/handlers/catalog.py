@@ -3,13 +3,13 @@ import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from api_client import fetch_product_detail, fetch_products, sync_user
-from handlers.common import extract_user_context
+from api_client import fetch_product_detail, fetch_products
+from handlers.common import clear_chat_footprint
 
 logger = logging.getLogger(__name__)
 
 
-def _build_catalog_keyboard(products: list) -> InlineKeyboardMarkup:
+def _build_catalog_keyboard(products: list) -> list:
     """Helper to format the vertical grid of catalog product buttons."""
     keyboard = []
     for item in products:
@@ -18,26 +18,35 @@ def _build_catalog_keyboard(products: list) -> InlineKeyboardMarkup:
         keyboard.append(
             [InlineKeyboardButton(button_text, callback_data=callback_data)]
         )
-    return InlineKeyboardMarkup(keyboard)
+    return keyboard
 
 
 async def catalog_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Queries the API container and renders interactive menus."""
-    user_ctx = extract_user_context(update)
-    await sync_user(user_ctx)
+    await clear_chat_footprint(update, context)
 
     products = await fetch_products()
-
     if not products:
         text = "The catalog is currently empty or down for maintenance."
-        await update.message.reply_text(text)
+        sent_msg = await update.effective_chat.send_message(text=text)
+        context.user_data["active_menu_id"] = sent_msg.message_id
         return
 
-    reply_markup = _build_catalog_keyboard(products)
-    menu_text = "📦 *Available Products*:\nSelect an item to view details:"
-    await update.message.reply_text(
-        text=menu_text, parse_mode="Markdown", reply_markup=reply_markup
+    buttons = _build_catalog_keyboard(products)
+    buttons.append(
+        [InlineKeyboardButton("🛍️ View Your Cart", callback_data="view_cart_nav")]
     )
+    buttons.append(
+        [InlineKeyboardButton("🏠 Return to Main Menu", callback_data="back_start")]
+    )
+
+    menu_text = "📦 *Available Products*:\nSelect an item to view details:"
+    sent_msg = await update.effective_chat.send_message(
+        text=menu_text,
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(buttons),
+    )
+    context.user_data["active_menu_id"] = sent_msg.message_id
 
 
 async def view_product_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -49,10 +58,9 @@ async def view_product_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
     product = await fetch_product_detail(product_id)
 
     if not product:
-        await query.message.reply_text("Product record could not be found.")
+        await query.edit_message_text("Product record could not be found.")
         return
 
-    # Render a clean Markdown detail card
     card_text = (
         f"📦 *{product['name']}*\n"
         f"Category: {product['category_name']}\n"
@@ -61,13 +69,13 @@ async def view_product_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"_{product['description']}_"
     )
 
-    # UI Controls: Add to Cart (Stubbed for Commit 15) and Back navigation
     keyboard = [
         [
             InlineKeyboardButton(
                 "🛒 Add to Cart", callback_data=f"add_to_cart_{product['id']}"
             )
         ],
+        [InlineKeyboardButton("🛍️ View Cart", callback_data="view_cart_nav")],
         [InlineKeyboardButton("⬅️ Back to Catalog", callback_data="back_catalog")],
     ]
 
@@ -90,9 +98,17 @@ async def back_to_catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    reply_markup = _build_catalog_keyboard(products)
-    menu_text = "📦 *Available Products*:\nSelect an item to view details:"
+    buttons = _build_catalog_keyboard(products)
+    buttons.append(
+        [InlineKeyboardButton("🛍️ View Your Cart", callback_data="view_cart_nav")]
+    )
+    buttons.append(
+        [InlineKeyboardButton("🏠 Return to Main Menu", callback_data="back_start")]
+    )
 
+    menu_text = "📦 *Available Products*:\nSelect an item to view details:"
     await query.edit_message_text(
-        text=menu_text, parse_mode="Markdown", reply_markup=reply_markup
+        text=menu_text,
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(buttons),
     )
