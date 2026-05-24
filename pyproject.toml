@@ -1,14 +1,26 @@
 [project]
 name = "retail-bot-platform"
-requires-python = ">=3.12"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "python-telegram-bot>=21.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff",
+    "pytest",
+    "pytest-asyncio",
+]
 
 [tool.ruff]
 line-length = 88
-target-version = "py312"
+target-version = "py313"
 exclude = [
     ".git",
     ".pytest_cache",
     ".ruff_cache",
+    ".venv",
     "venv",
     "__pycache__",
 ]
@@ -16,3 +28,7 @@ exclude = [
 [tool.ruff.lint]
 select = ["F", "E", "I"]
 ignore = []
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["bot"]
