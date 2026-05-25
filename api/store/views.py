@@ -81,7 +81,6 @@ class OrderViewSet(viewsets.ModelViewSet):
 
             order = Order.objects.create(
                 user=user,
-                status="COMPLETED",
                 total_amount=total_amount,
                 shipping_address={"raw_address": shipping_address},
             )
