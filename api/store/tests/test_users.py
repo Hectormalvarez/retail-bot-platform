@@ -1,6 +1,7 @@
 import pytest
 from rest_framework.test import APIClient
 
+
 @pytest.mark.django_db
 def test_user_synchronization_endpoint():
     client = APIClient()
@@ -9,7 +10,7 @@ def test_user_synchronization_endpoint():
         "username": "test_shopper",
         "first_name": "Hector",
     }
-    
+
     res = client.post("/api/users/", user_payload, format="json")
     assert res.status_code == 201
 

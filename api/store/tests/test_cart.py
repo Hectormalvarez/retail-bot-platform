@@ -2,6 +2,7 @@ import pytest
 from rest_framework.test import APIClient
 from store.models import Category, Product, TelegramUser, Cart
 
+
 @pytest.mark.django_db
 def test_cart_operations_and_totals():
     client = APIClient()
@@ -11,7 +12,7 @@ def test_cart_operations_and_totals():
     product = Product.objects.create(
         category=category, name="Cyberpunk Mug", price="20.00", stock=10
     )
-    
+
     cart = Cart.objects.create(user=user)
 
     item_payload = {"cart": cart.id, "product": product.id, "quantity": 2}
