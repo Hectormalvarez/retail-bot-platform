@@ -121,3 +121,15 @@ async def update_item_quantity(item_id: int, new_qty: int):
         except httpx.HTTPError as exc:
             logger.error(f"Failed updating cart item {item_id}: {exc}")
             return False
+
+
+async def submit_order(tg_id: int, shipping_address: str):
+    async with httpx.AsyncClient() as client:
+        try:
+            payload = {"user": tg_id, "shipping_address": shipping_address}
+            res = await client.post(f"{API_BASE_URL}orders/", json=payload)
+            res.raise_for_status()
+            return res.json()
+        except httpx.HTTPError as exc:
+            logger.error(f"Order submission gateway failure: {exc}")
+            return None

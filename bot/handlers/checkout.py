@@ -3,7 +3,7 @@ import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes, ConversationHandler
 
-from api_client import fetch_user_cart
+from api_client import fetch_user_cart, submit_order
 from handlers.common import clear_chat_footprint
 
 logger = logging.getLogger(__name__)
@@ -74,15 +74,13 @@ async def capture_address(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     return CONFIRMING
 
 
-async def finalize_order_placeholder(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> int:
+async def finalize_order(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
     tg_id = query.from_user.id
 
-    cart = await fetch_user_cart(tg_id)
     address_text = context.user_data.get("checkout_address", "N/A")
+    order_data = await submit_order(tg_id, address_text)
 
     try:
         await query.message.delete()
@@ -90,25 +88,34 @@ async def finalize_order_placeholder(
         pass
     context.user_data["active_menu_id"] = None
 
+    if not order_data:
+        await update.effective_chat.send_message(
+            text=(
+                "❌ *Checkout Failed*\nYour items could not be processed. "
+                "This may be due to insufficient stock or a network error."
+            ),
+            parse_mode="Markdown",
+        )
+        context.user_data.pop("checkout_address", None)
+        return ConversationHandler.END
+
     receipt_lines = [
-        "✅ *Order Confirmed*\n",
+        f"✅ *Order #{order_data['id']} Confirmed*\n",
         f"*Shipping Address*:\n`{address_text}`\n",
         "*Items*:",
     ]
 
-    if cart and "items" in cart:
-        for item in cart["items"]:
-            receipt_lines.append(
-                f"• {item['product_name']} x{item['quantity']} — ${item['subtotal']}"
-            )
-        receipt_lines.append(f"\n*Total Paid*: ${cart['cart_total']}")
-    else:
-        receipt_lines.append("\n_Processing transaction items._")
+    for item in order_data["items"]:
+        receipt_lines.append(
+            f"• {item['product_name']} x{item['quantity']} "
+            f"— ${item['price_at_purchase']}"
+        )
 
+    receipt_lines.append(f"\n*Total Paid*: ${order_data['total_amount']}")
     text_body = "\n".join(receipt_lines)
 
     await update.effective_chat.send_message(text=text_body, parse_mode="Markdown")
-    
+
     context.user_data.pop("checkout_address", None)
     return ConversationHandler.END
 

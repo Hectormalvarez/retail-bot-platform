@@ -44,7 +44,7 @@ if __name__ == "__main__":
             ],
             checkout.CONFIRMING: [
                 CallbackQueryHandler(
-                    checkout.finalize_order_placeholder,
+                    checkout.finalize_order,
                     pattern=r"^confirm_checkout$",
                 ),
                 CallbackQueryHandler(
