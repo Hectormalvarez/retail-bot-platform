@@ -6,6 +6,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    volumes:
+      - bot_state:/app/data
     networks:
       - retail_mesh
     depends_on:
@@ -46,3 +48,4 @@ networks:
 
 volumes:
   postgres_data:
+  bot_state:

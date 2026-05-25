@@ -11,3 +11,7 @@ __pycache__/
 # Testing & Linting
 .pytest_cache/
 .ruff_cache/
+
+# Cache & Persistence State
+data/
+*.pickle

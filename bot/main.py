@@ -8,6 +8,7 @@ from telegram.ext import (
     CommandHandler,
     ConversationHandler,
     MessageHandler,
+    PicklePersistence,
     filters,
 )
 
@@ -26,7 +27,11 @@ if __name__ == "__main__":
     if not token:
         raise ValueError("TELEGRAM_TOKEN not set in .env")
 
-    app = ApplicationBuilder().token(token).build()
+    os.makedirs("data", exist_ok=True)
+
+    persistence = PicklePersistence(filepath="data/bot_state.pickle")
+
+    app = ApplicationBuilder().token(token).persistence(persistence).build()
 
     app.add_handler(CommandHandler("start", common.start))
     app.add_handler(CommandHandler("catalog", catalog.catalog_command))
