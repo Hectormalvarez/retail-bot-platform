@@ -2,9 +2,16 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler
+from telegram.ext import (
+    ApplicationBuilder,
+    CallbackQueryHandler,
+    CommandHandler,
+    ConversationHandler,
+    MessageHandler,
+    filters,
+)
 
-from handlers import cart, catalog, common
+from handlers import cart, catalog, checkout, common
 
 load_dotenv()
 
@@ -24,6 +31,31 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("start", common.start))
     app.add_handler(CommandHandler("catalog", catalog.catalog_command))
     app.add_handler(CommandHandler("cart", cart.cart_command))
+
+    checkout_conv = ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(checkout.start_checkout, pattern=r"^checkout$")
+        ],
+        states={
+            checkout.WAITING_FOR_ADDRESS: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND, checkout.capture_address
+                )
+            ],
+            checkout.CONFIRMING: [
+                CallbackQueryHandler(
+                    checkout.finalize_order_placeholder,
+                    pattern=r"^confirm_checkout$",
+                ),
+                CallbackQueryHandler(
+                    checkout.cancel_checkout, pattern=r"^cancel_checkout$"
+                ),
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", checkout.cancel_command_fallback)],
+        allow_reentry=True,
+    )
+    app.add_handler(checkout_conv)
 
     app.add_handler(
         CallbackQueryHandler(catalog.view_product_detail, pattern=r"^view_prod_\d+$")
