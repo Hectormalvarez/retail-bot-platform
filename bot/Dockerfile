@@ -3,7 +3,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y gcc python3-dev
 COPY pyproject.toml .
 RUN touch main.py && mkdir handlers && touch handlers/__init__.py
-RUN pip install --user --no-cache-dir .
+RUN pip install --user --no-cache-dir ".[dev]"
 
 FROM python:3.13-slim
 WORKDIR /app

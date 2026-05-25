@@ -13,6 +13,7 @@ dev = [
     "ruff",
     "pytest",
     "pytest-asyncio",
+    "pytest-mock",
 ]
 
 [tool.ruff]
@@ -33,7 +34,7 @@ ignore = []
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["bot"]
+testpaths = ["tests"]
 
 [tool.setuptools]
 packages = ["handlers"]
