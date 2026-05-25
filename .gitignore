@@ -11,6 +11,7 @@ __pycache__/
 # Testing & Linting
 .pytest_cache/
 .ruff_cache/
+*/.coverage
 
 # Cache & Persistence State
 data/

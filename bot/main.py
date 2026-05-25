@@ -3,6 +3,7 @@ import os
 
 from dotenv import load_dotenv
 from telegram.ext import (
+    Application,
     ApplicationBuilder,
     CallbackQueryHandler,
     CommandHandler,
@@ -22,16 +23,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-if __name__ == "__main__":
-    token = os.getenv("TELEGRAM_TOKEN")
-    if not token:
-        raise ValueError("TELEGRAM_TOKEN not set in .env")
 
+def build_app(bot_token: str) -> Application:
+    """Assembles the bot application and registers all route handlers."""
     os.makedirs("data", exist_ok=True)
-
     persistence = PicklePersistence(filepath="data/bot_state.pickle")
-
-    app = ApplicationBuilder().token(token).persistence(persistence).build()
+    
+    app = ApplicationBuilder().token(bot_token).persistence(persistence).build()
 
     app.add_handler(CommandHandler("start", common.start))
     app.add_handler(CommandHandler("catalog", catalog.catalog_command))
@@ -78,6 +76,15 @@ if __name__ == "__main__":
             cart.adjust_quantity_handler, pattern=r"^qty_(up|down)_\d+_\d+$"
         )
     )
+    
+    return app
+
+
+if __name__ == "__main__":
+    token = os.getenv("TELEGRAM_TOKEN")
+    if not token:
+        raise ValueError("TELEGRAM_TOKEN not set in .env")
 
     logger.info("Initializing modular Telegram bot routing map...")
-    app.run_polling()
+    application = build_app(token)
+    application.run_polling()

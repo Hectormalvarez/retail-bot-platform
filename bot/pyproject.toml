@@ -14,6 +14,7 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "pytest-mock",
+    "pytest-cov",
 ]
 
 [tool.ruff]
@@ -35,6 +36,10 @@ ignore = []
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = "--cov=. --cov-report=term-missing"
+filterwarnings = [
+    "ignore::telegram.warnings.PTBUserWarning"
+]
 
 [tool.setuptools]
 packages = ["handlers"]
