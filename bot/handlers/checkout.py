@@ -11,6 +11,50 @@ logger = logging.getLogger(__name__)
 WAITING_FOR_ADDRESS, CONFIRMING = range(2)
 
 
+def render_order_confirmation(cart: dict, address: str) -> tuple[str, list]:
+    """Generates the order confirmation preview text and control buttons."""
+    message_lines = [
+        "💳 *Confirm Your Order Selection*:\n",
+        f"📍 *Shipping To*:\n`{address}`\n",
+    ]
+    for item in cart["items"]:
+        message_lines.append(
+            f"• *{item['product_name']}* x{item['quantity']} — ${item['subtotal']}"
+        )
+
+    message_lines.append(f"\n*Total Amount Due*: ${cart['cart_total']}")
+    text_body = "\n".join(message_lines)
+
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "✅ Confirm & Place Order", callback_data="confirm_checkout"
+            )
+        ],
+        [InlineKeyboardButton("❌ Cancel Checkout", callback_data="cancel_checkout")],
+    ]
+    return text_body, keyboard
+
+
+def render_order_receipt(order_data: dict, address: str) -> tuple[str, list]:
+    """Generates the completed order receipt text after checkout succeeds."""
+    receipt_lines = [
+        f"✅ *Order #{order_data['id']} Confirmed*\n",
+        f"*Shipping Address*:\n`{address}`\n",
+        "*Items*:",
+    ]
+
+    for item in order_data["items"]:
+        receipt_lines.append(
+            f"• {item['product_name']} x{item['quantity']} "
+            f"— ${item['price_at_purchase']}"
+        )
+
+    receipt_lines.append(f"\n*Total Paid*: ${order_data['total_amount']}")
+    text_body = "\n".join(receipt_lines)
+    return text_body, []
+
+
 async def start_checkout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
@@ -44,27 +88,7 @@ async def capture_address(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await clear_chat_footprint(update, context)
 
     cart = await fetch_user_cart(tg_id)
-    message_lines = [
-        "💳 *Confirm Your Order Selection*:\n",
-        f"📍 *Shipping To*:\n`{address_text}`\n",
-    ]
-    for item in cart["items"]:
-        message_lines.append(
-            f"• *{item['product_name']}* x{item['quantity']} — ${item['subtotal']}"
-        )
-
-    message_lines.append(f"\n*Total Amount Due*: ${cart['cart_total']}")
-    text_body = "\n".join(message_lines)
-
-    keyboard = [
-        [
-            InlineKeyboardButton(
-                "✅ Confirm & Place Order", callback_data="confirm_checkout"
-            )
-        ],
-        [InlineKeyboardButton("❌ Cancel Checkout", callback_data="cancel_checkout")],
-    ]
-
+    text_body, keyboard = render_order_confirmation(cart, address_text)
     sent_msg = await update.effective_chat.send_message(
         text=text_body,
         parse_mode="Markdown",
@@ -99,20 +123,7 @@ async def finalize_order(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         context.user_data.pop("checkout_address", None)
         return ConversationHandler.END
 
-    receipt_lines = [
-        f"✅ *Order #{order_data['id']} Confirmed*\n",
-        f"*Shipping Address*:\n`{address_text}`\n",
-        "*Items*:",
-    ]
-
-    for item in order_data["items"]:
-        receipt_lines.append(
-            f"• {item['product_name']} x{item['quantity']} "
-            f"— ${item['price_at_purchase']}"
-        )
-
-    receipt_lines.append(f"\n*Total Paid*: ${order_data['total_amount']}")
-    text_body = "\n".join(receipt_lines)
+    text_body, _ = render_order_receipt(order_data, address_text)
 
     await update.effective_chat.send_message(text=text_body, parse_mode="Markdown")
 
@@ -124,9 +135,14 @@ async def cancel_checkout(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     query = update.callback_query
     await query.answer(text="Checkout aborted.")
 
-    from handlers.cart import cart_command
+    from api_client import fetch_user_cart
+    from handlers.cart import render_cart_menu
 
-    await cart_command(update, context)
+    cart = await fetch_user_cart(query.from_user.id)
+    text, keyboard = render_cart_menu(cart)
+    await query.message.edit_text(
+        text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard)
+    )
     return ConversationHandler.END
 
 
