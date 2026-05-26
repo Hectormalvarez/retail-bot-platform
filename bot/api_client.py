@@ -152,31 +152,15 @@ class HttpApiClient(ApiClient):
         if not cart:
             return False
 
-        existing_item = next(
-            (
-                i
-                for i in cart.get("items", [])
-                if i["product"] == product_id
-            ),
-            None,
+        result = await self._post(
+            "cart-items/",
+            json={
+                "cart": cart["id"],
+                "product": product_id,
+                "quantity": 1,
+            },
         )
-
-        if existing_item:
-            url = f"cart-items/{existing_item['id']}/"
-            result = await self._patch(
-                url, json={"quantity": existing_item["quantity"] + 1}
-            )
-            return result is not None
-        else:
-            result = await self._post(
-                "cart-items/",
-                json={
-                    "cart": cart["id"],
-                    "product": product_id,
-                    "quantity": 1,
-                },
-            )
-            return result is not None
+        return result is not None
 
     async def update_item_quantity(
         self, item_id: int, new_qty: int
@@ -248,34 +232,27 @@ class MockApiClient(ApiClient):
         cart = await self.fetch_user_cart(tg_id)
         if not cart:
             return False
+        detail = self.product_details.get(product_id, {})
+        unit_price = float(detail.get("price", 0))
+
         existing = next(
             (i for i in cart["items"] if i["product"] == product_id), None
         )
         if existing:
             existing["quantity"] += 1
-            existing["subtotal"] = str(
-                float(existing.get("subtotal", 0))
-                + float(
-                    self.product_details.get(product_id, {}).get(
-                        "price", 0
-                    )
-                )
-            )
+            existing["subtotal"] = f"{unit_price * existing['quantity']:.2f}"
         else:
-            detail = self.product_details.get(product_id, {})
             cart["items"].append(
                 {
                     "id": self.next_cart_item_id,
                     "product": product_id,
                     "product_name": detail.get("name", "Unknown"),
                     "quantity": 1,
-                    "subtotal": detail.get("price", "0.00"),
+                    "subtotal": f"{unit_price:.2f}",
                 }
             )
             self.next_cart_item_id += 1
-        cart["cart_total"] = str(
-            sum(float(i["subtotal"]) for i in cart["items"])
-        )
+        cart["cart_total"] = f"{sum(float(i['subtotal']) for i in cart['items']):.2f}"
         return True
 
     async def update_item_quantity(
@@ -288,9 +265,13 @@ class MockApiClient(ApiClient):
                         cart["items"].remove(item)
                     else:
                         item["quantity"] = new_qty
-                    cart["cart_total"] = str(
-                        sum(float(i["subtotal"]) for i in cart["items"])
-                    )
+                        unit_price = float(
+                            self.product_details.get(
+                                item["product"], {}
+                            ).get("price", 0)
+                        )
+                        item["subtotal"] = f"{unit_price * new_qty:.2f}"
+                    cart["cart_total"] = f"{sum(float(i['subtotal']) for i in cart['items']):.2f}"
                     return True
         return False
 
