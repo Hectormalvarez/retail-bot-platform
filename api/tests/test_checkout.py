@@ -108,3 +108,35 @@ def test_order_service_create_order_invalid_user_returns_error(db):
     assert order is None
     assert error is not None
     assert "Invalid user" in error
+
+
+@pytest.mark.django_db
+def test_list_orders_filtered_by_user_and_sorted(api_client, db):
+    """GET /api/orders/?user=<id> returns only that user's orders, newest first."""
+    from store.models import Order
+    from .factories import TelegramUserFactory, OrderFactory
+
+    user_a = TelegramUserFactory(telegram_id=1001, first_name="Alice")
+    user_b = TelegramUserFactory(telegram_id=1002, first_name="Bob")
+
+    OrderFactory(user=user_b, total_amount="50.00")
+    OrderFactory(user=user_a, total_amount="10.00")
+    OrderFactory(user=user_a, total_amount="20.00")
+    OrderFactory(user=user_b, total_amount="60.00")
+    OrderFactory(user=user_a, total_amount="30.00")
+
+    res = api_client.get(f"/api/orders/?user={user_a.telegram_id}")
+
+    assert res.status_code == 200
+    orders = res.data
+
+    # All returned orders belong to user_a
+    assert len(orders) == 3
+    for order in orders:
+        assert order["user"] == user_a.telegram_id
+
+    # Sorted newest-first by created_at
+    timestamps = [order["created_at"] for order in orders]
+    assert timestamps == sorted(timestamps, reverse=True), (
+        "Orders should be sorted newest-first"
+    )

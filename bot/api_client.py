@@ -63,6 +63,11 @@ class ApiClient(ABC):
         self, address_id: int
     ) -> bool: ...
 
+    @abstractmethod
+    async def fetch_user_orders(
+        self, tg_id: int
+    ) -> list[dict[str, Any]]: ...
+
 
 # ---------------------------------------------------------------------------
 # Concrete HTTP implementation
@@ -216,6 +221,12 @@ class HttpApiClient(ApiClient):
     ) -> bool:
         return await self._delete(f"addresses/{address_id}/")
 
+    async def fetch_user_orders(
+        self, tg_id: int
+    ) -> list[dict[str, Any]]:
+        data = await self._get(f"orders/?user={tg_id}")
+        return data if isinstance(data, list) else []
+
 
 # ---------------------------------------------------------------------------
 # In-memory mock for unit tests
@@ -233,6 +244,7 @@ class MockApiClient(ApiClient):
     next_order_id: int = 1
     _addresses: list[dict] = None  # type: ignore[assignment]
     _next_address_id: int = 1
+    _orders: list[dict] = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
         if self.products is None:
@@ -245,6 +257,8 @@ class MockApiClient(ApiClient):
             self.users = set()
         if self._addresses is None:
             self._addresses = []
+        if self._orders is None:
+            self._orders = []
 
     async def fetch_products(self) -> list[dict]:
         return self.products
@@ -322,6 +336,7 @@ class MockApiClient(ApiClient):
             return None
         order = {
             "id": self.next_order_id,
+            "user": tg_id,
             "total_amount": cart["cart_total"],
             "items": [
                 {
@@ -333,9 +348,15 @@ class MockApiClient(ApiClient):
             ],
         }
         self.next_order_id += 1
+        self._orders.append(order)
         cart["items"].clear()
         cart["cart_total"] = "0.00"
         return order
+
+    async def fetch_user_orders(
+        self, tg_id: int
+    ) -> list[dict]:
+        return [o for o in self._orders if o["user"] == tg_id]
 
     async def fetch_addresses(
         self, tg_id: int

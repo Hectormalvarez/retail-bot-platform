@@ -145,7 +145,42 @@ class TestMockApiClient:
         ok = await client.delete_address(99999)
         assert ok is False
 
+    # ---- fetch_user_orders -------------------------------------------------
 
+    @pytest.mark.asyncio
+    async def test_fetch_user_orders_empty_for_new_user(self, client):
+        """A shopper with no order history gets an empty list without errors."""
+        result = await client.fetch_user_orders(999)
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_fetch_user_orders_returns_after_submit(self, client):
+        """After placing an order, fetch_user_orders returns it."""
+        await client.add_product_to_cart(123, 1)
+        order = await client.submit_order(123, "addr")
+        assert order is not None
+
+        orders = await client.fetch_user_orders(123)
+        assert len(orders) == 1
+        assert orders[0]["id"] == order["id"]
+
+    @pytest.mark.asyncio
+    async def test_fetch_user_orders_scoped_to_user(self, client):
+        """Orders for different users don't leak across accounts."""
+        await client.add_product_to_cart(123, 1)
+        await client.submit_order(123, "addr a")
+
+        await client.add_product_to_cart(456, 1)
+        await client.submit_order(456, "addr b")
+
+        orders_a = await client.fetch_user_orders(123)
+        assert len(orders_a) == 1
+
+        orders_b = await client.fetch_user_orders(456)
+        assert len(orders_b) == 1
+
+        # No cross-contamination
+        assert orders_a[0]["id"] != orders_b[0]["id"]
 # ---------------------------------------------------------------------------
 # HttpApiClient – uses mocked httpx so no real network
 # ---------------------------------------------------------------------------

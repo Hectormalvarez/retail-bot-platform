@@ -130,6 +130,13 @@ class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.all()
     serializer_class = OrderSerializer
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user_tg_id = self.request.query_params.get("user")
+        if user_tg_id is not None:
+            qs = qs.filter(user__telegram_id=user_tg_id)
+        return qs.order_by("-created_at")
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._order_service = OrderService()
