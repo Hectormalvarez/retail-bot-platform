@@ -9,57 +9,46 @@ from handlers.common import clear_chat_footprint
 logger = logging.getLogger(__name__)
 
 
-def _build_catalog_keyboard(products: list) -> list:
-    """Helper to format the vertical grid of catalog product buttons."""
-    keyboard = []
-    for item in products:
-        button_text = f"{item['name']} — ${item['price']}"
-        callback_data = f"view_prod_{item['id']}"
-        keyboard.append(
-            [InlineKeyboardButton(button_text, callback_data=callback_data)]
-        )
-    return keyboard
+def parse_product_id(callback_data: str) -> int:
+    """Extracts the integer product database ID from a callback query string."""
+    return int(callback_data.split("_")[-1])
 
 
-async def catalog_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Queries the API container and renders interactive menus."""
-    await clear_chat_footprint(update, context)
-
-    products = await fetch_products()
+def render_catalog_menu(products: list) -> tuple[str, list]:
+    """Generates the text body and inline keyboard markup for the catalog."""
     if not products:
-        text = "The catalog is currently empty or down for maintenance."
-        sent_msg = await update.effective_chat.send_message(text=text)
-        context.user_data["active_menu_id"] = sent_msg.message_id
-        return
+        return "The catalog is currently empty or down for maintenance.", []
 
-    buttons = _build_catalog_keyboard(products)
-    buttons.append(
-        [InlineKeyboardButton("🛍️ View Your Cart", callback_data="view_cart_nav")]
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                f"{p['name']} — ${p['price']}",
+                callback_data=f"view_prod_{p['id']}",
+            )
+        ]
+        for p in products
+    ]
+    keyboard.extend(
+        [
+            [
+                InlineKeyboardButton(
+                    "🛍️ View Your Cart", callback_data="view_cart_nav"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "🏠 Return to Main Menu", callback_data="back_start"
+                )
+            ],
+        ]
     )
-    buttons.append(
-        [InlineKeyboardButton("🏠 Return to Main Menu", callback_data="back_start")]
-    )
-
-    menu_text = "📦 *Available Products*:\nSelect an item to view details:"
-    sent_msg = await update.effective_chat.send_message(
-        text=menu_text,
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(buttons),
-    )
-    context.user_data["active_menu_id"] = sent_msg.message_id
+    return "📦 *Available Products*:\nSelect an item to view details:", keyboard
 
 
-async def view_product_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Fetches and displays the deep-dive card for a specific product."""
-    query = update.callback_query
-    await query.answer()
-
-    product_id = int(query.data.split("_")[-1])
-    product = await fetch_product_detail(product_id)
-
+def render_product_card(product: dict) -> tuple[str, list]:
+    """Generates the text body and inline keyboard for a product card."""
     if not product:
-        await query.edit_message_text("Product record could not be found.")
-        return
+        return "Product record could not be found.", []
 
     card_text = (
         f"📦 *{product['name']}*\n"
@@ -76,39 +65,54 @@ async def view_product_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
         ],
         [InlineKeyboardButton("🛍️ View Cart", callback_data="view_cart_nav")],
-        [InlineKeyboardButton("⬅️ Back to Catalog", callback_data="back_catalog")],
+        [
+            InlineKeyboardButton(
+                "⬅️ Back to Catalog", callback_data="back_catalog"
+            )
+        ],
     ]
+    return card_text, keyboard
+
+
+async def catalog_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Executes /catalog command to fetch and display available store items."""
+    await clear_chat_footprint(update, context)
+    products = await fetch_products()
+
+    text, keyboard = render_catalog_menu(products)
+    markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+
+    sent_msg = await update.effective_chat.send_message(
+        text=text, parse_mode="Markdown", reply_markup=markup
+    )
+    context.user_data["active_menu_id"] = sent_msg.message_id
+
+
+async def view_product_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles callback interactions to display full item specifications."""
+    query = update.callback_query
+    await query.answer()
+
+    product_id = parse_product_id(query.data)
+    product = await fetch_product_detail(product_id)
+
+    text, keyboard = render_product_card(product)
+    markup = InlineKeyboardMarkup(keyboard) if keyboard else None
 
     await query.edit_message_text(
-        text=card_text,
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        text=text, parse_mode="Markdown", reply_markup=markup
     )
 
 
 async def back_to_catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Edits the chat interface back to the main catalog menu row block."""
+    """Handles navigation callback requests to return users to the catalog."""
     query = update.callback_query
     await query.answer()
 
     products = await fetch_products()
-    if not products:
-        await query.edit_message_text(
-            "The catalog is currently empty or down for maintenance."
-        )
-        return
+    text, keyboard = render_catalog_menu(products)
+    markup = InlineKeyboardMarkup(keyboard) if keyboard else None
 
-    buttons = _build_catalog_keyboard(products)
-    buttons.append(
-        [InlineKeyboardButton("🛍️ View Your Cart", callback_data="view_cart_nav")]
-    )
-    buttons.append(
-        [InlineKeyboardButton("🏠 Return to Main Menu", callback_data="back_start")]
-    )
-
-    menu_text = "📦 *Available Products*:\nSelect an item to view details:"
     await query.edit_message_text(
-        text=menu_text,
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(buttons),
+        text=text, parse_mode="Markdown", reply_markup=markup
     )

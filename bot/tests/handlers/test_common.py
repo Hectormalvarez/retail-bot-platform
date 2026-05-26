@@ -35,7 +35,8 @@ async def test_clear_chat_footprint_ignores_missing_menu():
     context.bot.delete_message.assert_not_called()
 
 
-from handlers.common import start, back_to_start
+from handlers.common import back_to_start, start
+
 
 @pytest.mark.asyncio
 async def test_start_command_renders_menu(mocker):
@@ -48,7 +49,7 @@ async def test_start_command_renders_menu(mocker):
     update.effective_user.username = "test_user"
     update.effective_user.first_name = "Test"
     update.effective_user.last_name = "User"
-    
+
     update.effective_chat.send_message = AsyncMock()
     update.effective_chat.send_message.return_value.message_id = 404
 
@@ -71,7 +72,7 @@ async def test_back_to_start_edits_message():
 
     update.callback_query.answer.assert_called_once()
     update.callback_query.edit_message_text.assert_called_once()
-    
+
     # Verify the text contains our welcome message
     call_args = update.callback_query.edit_message_text.call_args[1]
     assert "Welcome to the Retail Bot!" in call_args["text"]

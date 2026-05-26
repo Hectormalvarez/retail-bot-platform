@@ -16,3 +16,4 @@ __pycache__/
 # Cache & Persistence State
 data/
 *.pickle
+.coverage

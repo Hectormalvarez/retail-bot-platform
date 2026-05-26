@@ -1,6 +1,7 @@
 import factory
 from store.models import Cart, Category, Product, TelegramUser
 
+
 class TelegramUserFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = TelegramUser

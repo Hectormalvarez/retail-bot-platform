@@ -28,7 +28,7 @@ def build_app(bot_token: str) -> Application:
     """Assembles the bot application and registers all route handlers."""
     os.makedirs("data", exist_ok=True)
     persistence = PicklePersistence(filepath="data/bot_state.pickle")
-    
+
     app = ApplicationBuilder().token(bot_token).persistence(persistence).build()
 
     app.add_handler(CommandHandler("start", common.start))
@@ -76,7 +76,7 @@ def build_app(bot_token: str) -> Application:
             cart.adjust_quantity_handler, pattern=r"^qty_(up|down)_\d+_\d+$"
         )
     )
-    
+
     return app
 
 
