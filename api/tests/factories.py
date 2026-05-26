@@ -1,5 +1,13 @@
 import factory
-from store.models import Cart, CartItem, Category, Order, OrderItem, Product, TelegramUser
+from store.models import (
+    Cart,
+    CartItem,
+    Category,
+    Order,
+    OrderItem,
+    Product,
+    TelegramUser,
+)
 
 
 class TelegramUserFactory(factory.django.DjangoModelFactory):

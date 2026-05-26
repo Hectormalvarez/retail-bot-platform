@@ -38,8 +38,10 @@ def test_cart_item_negative_quantity_returns_400(api_client, test_cart, test_pro
 
 
 @pytest.mark.django_db
-def test_cart_item_duplicate_product_increments_quantity(api_client, test_cart, test_product, test_cart_item):
-    """POST /api/cart-items/ with the same cart+product pair increments quantity instead of error."""
+def test_cart_item_duplicate_product_increments_quantity(
+    api_client, test_cart, test_product, test_cart_item
+):
+    """Duplicate cart+product pair increments quantity instead of error."""
     payload = {"cart": test_cart.id, "product": test_product.id, "quantity": 1}
     res = api_client.post("/api/cart-items/", payload, format="json")
     assert res.status_code == 201

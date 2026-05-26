@@ -1,5 +1,14 @@
 from django.contrib import admin
-from .models import Address, TelegramUser, Category, Product, Cart, CartItem, Order, OrderItem
+from .models import (
+    Address,
+    TelegramUser,
+    Category,
+    Product,
+    Cart,
+    CartItem,
+    Order,
+    OrderItem,
+)
 
 
 @admin.register(TelegramUser)

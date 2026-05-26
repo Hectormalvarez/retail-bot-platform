@@ -1,5 +1,15 @@
 from rest_framework import serializers
-from .models import Address, Cart, CartItem, Category, Order, OrderItem, Product, TelegramUser
+
+from .models import (
+    Address,
+    Cart,
+    CartItem,
+    Category,
+    Order,
+    OrderItem,
+    Product,
+    TelegramUser,
+)
 
 
 class TelegramUserSerializer(serializers.ModelSerializer):

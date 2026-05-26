@@ -87,11 +87,13 @@ def test_create_order_insufficient_stock_returns_error():
     product_repo = Mock(spec=DjangoProductRepo)
     product_repo.get_for_update.return_value = mock_product
 
-    service = _make_service({
-        "user_repo": user_repo,
-        "cart_repo": cart_repo,
-        "product_repo": product_repo,
-    })
+    service = _make_service(
+        {
+            "user_repo": user_repo,
+            "cart_repo": cart_repo,
+            "product_repo": product_repo,
+        }
+    )
     order, error = service.create_order(1, "addr")
 
     assert order is None
@@ -131,12 +133,14 @@ def test_create_order_happy_path_creates_order_with_items():
     order_repo = Mock(spec=DjangoOrderRepo)
     order_repo.create.return_value = mock_order
 
-    service = _make_service({
-        "user_repo": user_repo,
-        "cart_repo": cart_repo,
-        "product_repo": product_repo,
-        "order_repo": order_repo,
-    })
+    service = _make_service(
+        {
+            "user_repo": user_repo,
+            "cart_repo": cart_repo,
+            "product_repo": product_repo,
+            "order_repo": order_repo,
+        }
+    )
     order, error = service.create_order(1, "addr")
 
     assert error is None
@@ -197,12 +201,14 @@ def test_create_order_calculates_total_correctly():
     order_repo = Mock(spec=DjangoOrderRepo)
     order_repo.create.return_value = mock_order
 
-    service = _make_service({
-        "user_repo": user_repo,
-        "cart_repo": cart_repo,
-        "product_repo": product_repo,
-        "order_repo": order_repo,
-    })
+    service = _make_service(
+        {
+            "user_repo": user_repo,
+            "cart_repo": cart_repo,
+            "product_repo": product_repo,
+            "order_repo": order_repo,
+        }
+    )
     order, error = service.create_order(1, "addr")
 
     assert error is None
@@ -242,11 +248,13 @@ def test_cart_add_new_item():
     mock_product = MagicMock()
     product_repo.get_by_id.return_value = mock_product
 
-    service = _make_cart_service({
-        "user_repo": user_repo,
-        "cart_repo": cart_repo,
-        "product_repo": product_repo,
-    })
+    service = _make_cart_service(
+        {
+            "user_repo": user_repo,
+            "cart_repo": cart_repo,
+            "product_repo": product_repo,
+        }
+    )
     result = service.add_or_increment(1, 42)
 
     assert result is not None
@@ -299,11 +307,13 @@ def test_cart_add_invalid_product_returns_none():
     product_repo = Mock(spec=DjangoProductRepo)
     product_repo.get_by_id.side_effect = Exception("Product not found")
 
-    service = _make_cart_service({
-        "user_repo": user_repo,
-        "cart_repo": cart_repo,
-        "product_repo": product_repo,
-    })
+    service = _make_cart_service(
+        {
+            "user_repo": user_repo,
+            "cart_repo": cart_repo,
+            "product_repo": product_repo,
+        }
+    )
     result = service.add_or_increment(1, 99999)
 
     assert result is None

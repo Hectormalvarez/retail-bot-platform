@@ -79,7 +79,9 @@ class CartItemViewSet(viewsets.ModelViewSet):
             )
 
         tg_id = cart.user.telegram_id
-        cart_item = self._cart_service.add_or_increment(tg_id, product_id, quantity=quantity)
+        cart_item = self._cart_service.add_or_increment(
+            tg_id, product_id, quantity=quantity
+        )
         if cart_item is None:
             return Response(
                 {"error": "Failed to add item — user or product not found"},

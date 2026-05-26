@@ -23,7 +23,7 @@ def test_catalog_api_flow(api_client, test_category):
 
 @pytest.mark.django_db
 def test_products_filter_by_nonexistent_category_returns_400(api_client):
-    """GET /api/products/?category=X with a non-existent category returns 400 (django-filter validation)."""
+    """Non-existent category returns 400 (django-filter validation)."""
     res = api_client.get("/api/products/?category=99999")
     assert res.status_code == 400
 

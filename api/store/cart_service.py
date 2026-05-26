@@ -22,7 +22,9 @@ class CartService:
         self.carts = cart_repo or DjangoCartRepo()
         self.products = product_repo or DjangoProductRepo()
 
-    def add_or_increment(self, tg_id: int, product_id: int, quantity: int = 1) -> CartItem | None:
+    def add_or_increment(
+        self, tg_id: int, product_id: int, quantity: int = 1
+    ) -> CartItem | None:
         """Add a product to the user's cart, or increment if it already exists.
 
         Returns the CartItem, or None if the user/product does not exist.
