@@ -4,14 +4,22 @@ import pytest
 from telegram.ext import ConversationHandler
 
 from handlers.checkout import (
+    ASK_SAVE_ADDRESS,
     CONFIRMING,
+    SELECTING_ADDRESS,
     WAITING_FOR_ADDRESS,
+    build_address_keyboard,
     cancel_checkout,
     cancel_command_fallback,
     capture_address,
+    compute_address_label,
     finalize_order,
+    pick_saved_address,
+    prompt_new_address,
     render_order_confirmation,
     render_order_receipt,
+    save_address_and_confirm,
+    skip_save_confirm,
     start_checkout,
 )
 
@@ -56,6 +64,27 @@ def test_render_order_receipt():
     assert keyboard == []
 
 
+def test_build_address_keyboard():
+    """build_address_keyboard creates correct buttons from address list."""
+    addresses = [
+        {"id": 1, "label": "Home", "full_address": "123 Main St, City"},
+        {"id": 2, "label": "Office", "full_address": "456 Work Ave, Town"},
+    ]
+    keyboard = build_address_keyboard(addresses)
+    assert len(keyboard) == 4  # 2 addresses + "new address" + "cancel"
+    assert keyboard[0][0].callback_data == "pick_addr_1"
+    assert keyboard[1][0].callback_data == "pick_addr_2"
+    assert keyboard[2][0].callback_data == "new_address"
+    assert keyboard[3][0].callback_data == "cancel_checkout"
+
+
+def test_compute_address_label():
+    """compute_address_label generates sequential labels."""
+    assert compute_address_label([]) == "Address #1"
+    assert compute_address_label([{"id": 1}]) == "Address #2"
+    assert compute_address_label([{"id": 1}, {"id": 2}]) == "Address #3"
+
+
 # ---- handlers that need app.bot_data["ctx"] ------------------------------
 
 
@@ -88,8 +117,8 @@ async def test_start_checkout_with_empty_cart_aborts():
 
 
 @pytest.mark.asyncio
-async def test_start_checkout_with_items_asks_address():
-    """start_checkout transitions to WAITING_FOR_ADDRESS when cart has items."""
+async def test_start_checkout_with_items_no_addresses_asks_text():
+    """start_checkout transitions to WAITING_FOR_ADDRESS when cart has items but no saved addresses."""
     api = MockApiClient(
         product_details={1: {"id": 1, "name": "T-Shirt", "price": "25.00"}}
     )
@@ -107,8 +136,85 @@ async def test_start_checkout_with_items_asks_address():
 
 
 @pytest.mark.asyncio
-async def test_capture_address_transitions_to_confirming():
-    """capture_address stores address, fetches cart via DI, and returns CONFIRMING."""
+async def test_start_checkout_with_saved_addresses_shows_selection():
+    """start_checkout transitions to SELECTING_ADDRESS when cart has items and saved addresses exist."""
+    api = MockApiClient(
+        product_details={1: {"id": 1, "name": "T-Shirt", "price": "25.00"}}
+    )
+    await api.add_product_to_cart(123, 1)
+    await api.create_address(123, "Home", "123 Main St")
+    ctx = _make_context(api)
+
+    update = MagicMock()
+    update.callback_query = AsyncMock()
+    update.callback_query.from_user.id = 123
+
+    state = await start_checkout(update, ctx)
+
+    assert state == SELECTING_ADDRESS
+    assert len(ctx.user_data["saved_addresses"]) == 1
+    update.callback_query.edit_message_text.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_pick_saved_address_transitions_to_confirming():
+    """pick_saved_address looks up the selected address and shows confirmation."""
+    api = MockApiClient(
+        product_details={1: {"id": 1, "name": "T-Shirt", "price": "25.00"}}
+    )
+    await api.add_product_to_cart(123, 1)
+    await api.create_address(123, "Home", "123 Main St")
+    ctx = _make_context(api)
+
+    # Pre-populate saved_addresses from what start_checkout would have done
+    ctx.user_data["saved_addresses"] = await api.fetch_addresses(123)
+
+    update = MagicMock()
+    update.callback_query = AsyncMock()
+    update.callback_query.from_user.id = 123
+    update.callback_query.data = "pick_addr_1"
+
+    state = await pick_saved_address(update, ctx)
+
+    assert state == CONFIRMING
+    assert ctx.user_data["checkout_address"] == "123 Main St"
+    assert ctx.user_data["address_was_saved"] is True
+    update.callback_query.edit_message_text.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_pick_saved_address_invalid_id_returns_end():
+    """pick_saved_address returns END when the address id is not found."""
+    api = MockApiClient()
+    ctx = _make_context(api)
+    ctx.user_data["saved_addresses"] = []
+
+    update = MagicMock()
+    update.callback_query = AsyncMock()
+    update.callback_query.from_user.id = 123
+    update.callback_query.data = "pick_addr_999"
+
+    state = await pick_saved_address(update, ctx)
+
+    assert state == ConversationHandler.END
+
+
+@pytest.mark.asyncio
+async def test_prompt_new_address():
+    """prompt_new_address transitions to WAITING_FOR_ADDRESS."""
+    update = MagicMock()
+    update.callback_query = AsyncMock()
+    update.callback_query.from_user.id = 123
+
+    state = await prompt_new_address(update, MagicMock())
+
+    assert state == WAITING_FOR_ADDRESS
+    update.callback_query.edit_message_text.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_capture_address_transitions_to_ask_save():
+    """capture_address stores address and prompts to save."""
     api = MockApiClient(
         product_details={1: {"id": 1, "name": "T-Shirt", "price": "25.00"}}
     )
@@ -124,8 +230,56 @@ async def test_capture_address_transitions_to_confirming():
     state = await capture_address(update, ctx)
 
     assert ctx.user_data["checkout_address"] == "123 Main St"
+    assert ctx.user_data["address_was_saved"] is False
     assert ctx.user_data["active_menu_id"] == 999
+    assert state == ASK_SAVE_ADDRESS
+
+
+@pytest.mark.asyncio
+async def test_save_address_and_confirm():
+    """save_address_and_confirm persists address and shows confirmation."""
+    api = MockApiClient(
+        product_details={1: {"id": 1, "name": "T-Shirt", "price": "25.00"}}
+    )
+    await api.add_product_to_cart(123, 1)
+    ctx = _make_context(api)
+    ctx.user_data["checkout_address"] = "456 Oak Ln"
+
+    update = MagicMock()
+    update.callback_query = AsyncMock()
+    update.callback_query.from_user.id = 123
+
+    state = await save_address_and_confirm(update, ctx)
+
     assert state == CONFIRMING
+    assert ctx.user_data["address_was_saved"] is True
+    # Verify the address was actually persisted
+    addresses = await api.fetch_addresses(123)
+    assert len(addresses) == 1
+    assert addresses[0]["full_address"] == "456 Oak Ln"
+    assert addresses[0]["label"] == "Address #1"
+
+
+@pytest.mark.asyncio
+async def test_skip_save_confirm():
+    """skip_save_confirm goes straight to confirmation without saving."""
+    api = MockApiClient(
+        product_details={1: {"id": 1, "name": "T-Shirt", "price": "25.00"}}
+    )
+    await api.add_product_to_cart(123, 1)
+    ctx = _make_context(api)
+    ctx.user_data["checkout_address"] = "789 Pine Rd"
+
+    update = MagicMock()
+    update.callback_query = AsyncMock()
+    update.callback_query.from_user.id = 123
+
+    state = await skip_save_confirm(update, ctx)
+
+    assert state == CONFIRMING
+    # Verify address was NOT persisted
+    addresses = await api.fetch_addresses(123)
+    assert addresses == []
 
 
 @pytest.mark.asyncio

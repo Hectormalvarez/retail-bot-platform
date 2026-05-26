@@ -105,6 +105,46 @@ class TestMockApiClient:
         ok = await client.update_item_quantity(99999, 2)
         assert ok is False
 
+    # ---- address methods --------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_fetch_addresses_empty(self, client):
+        result = await client.fetch_addresses(123)
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_create_and_fetch_address(self, client):
+        created = await client.create_address(123, "Home", "123 Main St")
+        assert created is not None
+        assert created["label"] == "Home"
+        assert created["full_address"] == "123 Main St"
+        assert created["user"] == 123
+
+        result = await client.fetch_addresses(123)
+        assert len(result) == 1
+        assert result[0]["full_address"] == "123 Main St"
+
+    @pytest.mark.asyncio
+    async def test_fetch_addresses_scoped_to_user(self, client):
+        await client.create_address(123, "Home", "Addr A")
+        await client.create_address(456, "Office", "Addr B")
+        result = await client.fetch_addresses(123)
+        assert len(result) == 1
+        assert result[0]["full_address"] == "Addr A"
+
+    @pytest.mark.asyncio
+    async def test_delete_address(self, client):
+        created = await client.create_address(123, "Home", "Addr")
+        ok = await client.delete_address(created["id"])
+        assert ok is True
+        result = await client.fetch_addresses(123)
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_delete_address_nonexistent_returns_false(self, client):
+        ok = await client.delete_address(99999)
+        assert ok is False
+
 
 # ---------------------------------------------------------------------------
 # HttpApiClient – uses mocked httpx so no real network
