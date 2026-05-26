@@ -55,6 +55,9 @@ class ApiClient(ABC):
     @abstractmethod
     async def fetch_user_orders(self, tg_id: int) -> list[dict[str, Any]]: ...
 
+    @abstractmethod
+    async def fetch_store_config(self) -> dict[str, str]: ...
+
 
 # ---------------------------------------------------------------------------
 # Concrete HTTP implementation
@@ -199,6 +202,16 @@ class HttpApiClient(ApiClient):
         data = await self._get(f"orders/?user={tg_id}")
         return data if isinstance(data, list) else []
 
+    async def fetch_store_config(self) -> dict[str, str]:
+        data = await self._get("config/")
+        if isinstance(data, dict):
+            return data
+        return {
+            "venmo_handle": "@Fallback",
+            "zelle_email": "fallback@local",
+            "payment_instructions": "Please contact admin to pay.",
+        }
+
 
 # ---------------------------------------------------------------------------
 # In-memory mock for unit tests
@@ -218,6 +231,7 @@ class MockApiClient(ApiClient):
     _addresses: list[dict] = None  # type: ignore[assignment]
     _next_address_id: int = 1
     _orders: list[dict] = None  # type: ignore[assignment]
+    _config: dict[str, str] = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
         if self.products is None:
@@ -232,6 +246,12 @@ class MockApiClient(ApiClient):
             self._addresses = []
         if self._orders is None:
             self._orders = []
+        if self._config is None:
+            self._config = {
+                "venmo_handle": "@TestVenmo",
+                "zelle_email": "test@zelle.local",
+                "payment_instructions": "Send money to {venmo_handle} or {zelle_email} with note {order_id}",
+            }
 
     async def fetch_products(self) -> list[dict]:
         return self.products
@@ -344,3 +364,6 @@ class MockApiClient(ApiClient):
                 self._addresses.remove(a)
                 return True
         return False
+
+    async def fetch_store_config(self) -> dict[str, str]:
+        return self._config

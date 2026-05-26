@@ -1,13 +1,15 @@
 from django.contrib import admin
+
 from .models import (
     Address,
-    TelegramUser,
-    Category,
-    Product,
     Cart,
     CartItem,
+    Category,
     Order,
     OrderItem,
+    Product,
+    StoreConfig,
+    TelegramUser,
 )
 
 
@@ -30,3 +32,8 @@ admin.site.register(CartItem)
 admin.site.register(Order)
 admin.site.register(OrderItem)
 admin.site.register(Address)
+
+
+@admin.register(StoreConfig)
+class StoreConfigAdmin(admin.ModelAdmin):
+    list_display = ("key", "description")

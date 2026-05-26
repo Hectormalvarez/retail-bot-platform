@@ -60,7 +60,10 @@ class Product(models.Model):
         max_length=255,
         blank=True,
         null=True,
-        help_text="The internal Telegram file_id. Reuse this to bypass re-uploading assets to Telegram's CDN.",
+        help_text=(
+            "The internal Telegram file_id. "
+            "Reuse this to bypass re-uploading to Telegram CDN."
+        ),
     )
     is_visible = models.BooleanField(default=True)
 
@@ -145,3 +148,14 @@ class OrderItem(models.Model):
     product = models.ForeignKey(Product, on_delete=models.RESTRICT)
     quantity = models.PositiveIntegerField()
     price_at_purchase = models.DecimalField(max_digits=10, decimal_places=2)
+
+
+class StoreConfig(models.Model):
+    """Key-Value store for runtime-configurable settings (e.g. payment handles)."""
+
+    key = models.CharField(max_length=50, unique=True, primary_key=True)
+    value = models.TextField()
+    description = models.CharField(max_length=255, blank=True, null=True)
+
+    def __str__(self):
+        return self.key

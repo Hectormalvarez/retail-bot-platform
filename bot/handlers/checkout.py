@@ -54,21 +54,25 @@ def render_order_confirmation(cart: dict, address: str) -> tuple[str, list]:
 
 def render_order_receipt(
     order_data: dict,
-    address: str,
+    address: str | dict,
+    config: dict[str, str],
     back_callback: str = "back_start",
     back_label: str = "🏠 Return to Main Menu",
 ) -> tuple[str, list]:
     """Generates the completed order receipt text after checkout succeeds.
 
-    Appends manual payment instructions so the user knows how to pay for
-    manually-fulfilled orders.
+    Appends manual payment instructions (from DB-backed config) so the user
+    knows how to pay for manually-fulfilled orders.
 
     Parameters
     ----------
     order_data : dict
         The order response from the API.
-    address : str
-        The shipping address used for the order.
+    address : str | dict
+        The shipping address used for the order. Can be a raw string or a
+        dict with a ``"raw_address"`` key.
+    config : dict[str, str]
+        Key-value config dict (e.g. payment handles / instructions).
     back_callback : str
         Callback data for the bottom navigation button.
         Defaults to ``back_start`` (main menu).
@@ -81,6 +85,12 @@ def render_order_receipt(
     tuple[str, list]
         The formatted receipt text and inline keyboard grid.
     """
+    # Normalize address – it may be a dict with a "raw_address" key
+    if isinstance(address, dict):
+        address = address.get("raw_address", "")
+    else:
+        address = str(address)
+
     receipt_lines = [
         f"✅ *Order #{order_data['id']} Confirmed*\n",
         f"*Shipping Address*:\n`{address}`\n",
@@ -95,22 +105,14 @@ def render_order_receipt(
 
     receipt_lines.append(f"\n*Total Paid*: ${order_data['total_amount']}")
 
-    # Manual payment instructions block
-    receipt_lines.extend(
-        [
-            "",
-            "💳 **Manual Payment Instructions**:",
-            "Your order is currently **[Pending Payment]**. To complete your "
-            "purchase, please send the total amount to the store administrator.",
-            "",
-            "• **Venmo**: `@YourStoreHandle`",
-            "• **Zelle**: `payments@yourstore.local`",
-            "• **Reference Note**: Include `Order #XXXX` in your payment memo.",
-            "",
-            "*Once payment is verified, your order tracking status below will "
-            "update automatically.*",
-        ]
+    # Dynamic payment instructions from config
+    payment_text = config.get("payment_instructions", "").format(
+        venmo_handle=config.get("venmo_handle", ""),
+        zelle_email=config.get("zelle_email", ""),
+        order_id=order_data["id"],
     )
+    if payment_text:
+        receipt_lines.extend(["", payment_text])
 
     text_body = "\n".join(receipt_lines)
 
@@ -197,10 +199,12 @@ async def view_historical_order_detail_handler(
         )
         return
 
+    config = await ctx.api.fetch_store_config()
     address = order.get("shipping_address", "Unknown")
     text_body, keyboard = render_order_receipt(
         order,
         address,
+        config,
         back_callback="view_history_nav",
         back_label="⬅️ Back to History",
     )
@@ -381,6 +385,8 @@ async def finalize_order(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         pass
     context.user_data["active_menu_id"] = None
 
+    config = await ctx.api.fetch_store_config()
+
     if not order_data:
         # Defensive failure view — reconstruct navigation so the user
         # isn't left stranded with no controls
@@ -403,7 +409,7 @@ async def finalize_order(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         context.user_data.pop("saved_addresses", None)
         return ConversationHandler.END
 
-    text_body, keyboard = render_order_receipt(order_data, address_text)
+    text_body, keyboard = render_order_receipt(order_data, address_text, config)
     await update.effective_chat.send_message(
         text=text_body,
         parse_mode="Markdown",

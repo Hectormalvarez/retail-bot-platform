@@ -57,16 +57,21 @@ def test_render_order_receipt():
         ],
         "total_amount": "25.00",
     }
-    text, keyboard = render_order_receipt(order_data, "456 Side St")
+    config = {
+        "venmo_handle": "@TestVenmo",
+        "zelle_email": "test@zelle.local",
+        "payment_instructions": "Send money to {venmo_handle} or {zelle_email} with note {order_id}",
+    }
+    text, keyboard = render_order_receipt(order_data, "456 Side St", config)
 
     assert "Order #42 Confirmed" in text
     assert "456 Side St" in text
     assert "T-Shirt" in text
     assert "25.00" in text
-    # Payment instructions present
-    assert "Manual Payment Instructions" in text
-    assert "Venmo" in text
-    assert "Zelle" in text
+    # Payment instructions present and use config values
+    assert "@TestVenmo" in text
+    assert "test@zelle.local" in text
+    assert "note 42" in text
     # Keyboard has one back button
     assert len(keyboard) == 1
     assert keyboard[0][0].callback_data == "back_start"
@@ -80,9 +85,15 @@ def test_render_order_receipt_custom_back():
         "items": [],
         "total_amount": "0.00",
     }
+    config = {
+        "venmo_handle": "@TestVenmo",
+        "zelle_email": "test@zelle.local",
+        "payment_instructions": "Send money to {venmo_handle}",
+    }
     text, keyboard = render_order_receipt(
         order_data,
         "N/A",
+        config,
         back_callback="view_history_nav",
         back_label="⬅️ Back to History",
     )
@@ -103,6 +114,22 @@ def test_build_address_keyboard():
     assert keyboard[1][0].callback_data == "pick_addr_2"
     assert keyboard[2][0].callback_data == "new_address"
     assert keyboard[3][0].callback_data == "cancel_checkout"
+
+
+def test_render_order_receipt_dict_address():
+    """render_order_receipt normalizes a dict address with 'raw_address' key."""
+    order_data = {
+        "id": 42,
+        "items": [],
+        "total_amount": "0.00",
+    }
+    config = {
+        "venmo_handle": "@TestVenmo",
+        "zelle_email": "test@zelle.local",
+        "payment_instructions": "Pay via {venmo_handle}",
+    }
+    text, _ = render_order_receipt(order_data, {"raw_address": "456 Dict St"}, config)
+    assert "456 Dict St" in text
 
 
 def test_compute_address_label():
@@ -539,7 +566,9 @@ async def test_view_historical_order_detail_handler_shows_receipt():
     call_args = update.callback_query.edit_message_text.call_args[1]
     assert "Order #1 Confirmed" in call_args["text"]
     assert "123 Main St" in call_args["text"]
-    assert "Manual Payment Instructions" in call_args["text"]
+    assert "@TestVenmo" in call_args["text"]
+    assert "test@zelle.local" in call_args["text"]
+    assert "note 1" in call_args["text"]
     assert call_args["parse_mode"] == "Markdown"
 
     reply_markup = call_args["reply_markup"]

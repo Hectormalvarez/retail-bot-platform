@@ -1,5 +1,6 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
+
 from .views import (
     AddressViewSet,
     CartItemViewSet,
@@ -7,6 +8,7 @@ from .views import (
     CategoryViewSet,
     OrderViewSet,
     ProductViewSet,
+    StoreConfigView,
     TelegramUserViewSet,
 )
 
@@ -21,4 +23,5 @@ router.register(r"orders", OrderViewSet, basename="order")
 
 urlpatterns = [
     path("", include(router.urls)),
+    path("config/", StoreConfigView.as_view(), name="store-config"),
 ]

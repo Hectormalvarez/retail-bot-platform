@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from .models import Address, Cart, CartItem, Order, OrderItem, Product, TelegramUser
+from .models import Address, Cart, CartItem, Order, OrderItem, Product, StoreConfig, TelegramUser
 
 
 class DjangoCartRepo:
@@ -79,6 +79,13 @@ class DjangoUserRepo:
 
     def get_by_telegram(self, telegram_id: int) -> TelegramUser:
         return TelegramUser.objects.get(telegram_id=telegram_id)
+
+
+class DjangoConfigRepo:
+    """Wraps StoreConfig ORM queries for runtime configuration."""
+
+    def get_all(self) -> dict[str, str]:
+        return {config.key: config.value for config in StoreConfig.objects.all()}
 
 
 class DjangoOrderRepo:

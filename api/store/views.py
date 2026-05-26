@@ -1,6 +1,7 @@
 from django.db import transaction
 from rest_framework import status, viewsets
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from .cart_service import CartService
 from .models import Address, Cart, CartItem, Category, Order, Product, TelegramUser
 from .serializers import (
@@ -12,7 +13,16 @@ from .serializers import (
     ProductSerializer,
     TelegramUserSerializer,
 )
+from .repositories import DjangoConfigRepo
 from .services import OrderService
+
+
+class StoreConfigView(APIView):
+    """Returns flat key-value config dict for the bot client."""
+
+    def get(self, request):
+        repo = DjangoConfigRepo()
+        return Response(repo.get_all())
 
 
 class TelegramUserViewSet(viewsets.ModelViewSet):
