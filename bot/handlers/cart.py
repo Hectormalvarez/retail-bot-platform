@@ -1,17 +1,20 @@
+"""Shopping cart management via inline keyboards."""
+
+from __future__ import annotations
+
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import ContextTypes
+from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes
 
-from api_client import (
-    add_product_to_cart,
-    fetch_user_cart,
-    update_item_quantity,
-)
+from context import BotContext
 from handlers.catalog import parse_product_id
 from handlers.common import clear_chat_footprint
 
 logger = logging.getLogger(__name__)
+
+
+# ---- pure helpers (no DI) -----------------------------------------------
 
 
 def parse_quantity_action(callback_data: str) -> tuple[str, int, int]:
@@ -26,11 +29,7 @@ def render_cart_menu(cart: dict) -> tuple[str, list]:
         return (
             "🛒 *Your Shopping Cart is Empty.*",
             [
-                [
-                    InlineKeyboardButton(
-                        "📦 Browse Catalog", callback_data="back_catalog"
-                    )
-                ]
+                [InlineKeyboardButton("📦 Browse Catalog", callback_data="back_catalog")]
             ],
         )
 
@@ -70,14 +69,18 @@ def render_cart_menu(cart: dict) -> tuple[str, list]:
     return "\n".join(message_lines), keyboard
 
 
+# ---- handlers ------------------------------------------------------------
+
+
 async def add_to_cart_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Processes selections to append or increment products in the cart."""
     query = update.callback_query
     tg_id = query.from_user.id
 
     product_id = parse_product_id(query.data)
+    ctx: BotContext = context.application.bot_data["ctx"]
+    success = await ctx.api.add_product_to_cart(tg_id, product_id)
 
-    success = await add_product_to_cart(tg_id, product_id)
     if success:
         await query.answer(text="🛒 Added to cart!", show_alert=False)
     else:
@@ -96,14 +99,13 @@ async def cart_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await clear_chat_footprint(update, context)
 
-    cart = await fetch_user_cart(tg_id)
+    ctx: BotContext = context.application.bot_data["ctx"]
+    cart = await ctx.api.fetch_user_cart(tg_id)
     text, keyboard = render_cart_menu(cart)
     markup = InlineKeyboardMarkup(keyboard)
 
     if query:
-        await query.message.edit_text(
-            text, parse_mode="Markdown", reply_markup=markup
-        )
+        await query.message.edit_text(text, parse_mode="Markdown", reply_markup=markup)
     else:
         sent_msg = await update.effective_chat.send_message(
             text, parse_mode="Markdown", reply_markup=markup
@@ -119,9 +121,29 @@ async def adjust_quantity_handler(update: Update, context: ContextTypes.DEFAULT_
     action, item_id, current_qty = parse_quantity_action(query.data)
     new_qty = current_qty + 1 if action == "up" else current_qty - 1
 
-    await update_item_quantity(item_id, new_qty)
-    cart = await fetch_user_cart(update.effective_user.id)
+    ctx: BotContext = context.application.bot_data["ctx"]
+    await ctx.api.update_item_quantity(item_id, new_qty)
+
+    cart = await ctx.api.fetch_user_cart(update.effective_user.id)
     text, keyboard = render_cart_menu(cart)
     await query.message.edit_text(
         text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+# ---- registration --------------------------------------------------------
+
+
+def register_handlers(app) -> None:
+    app.add_handler(CommandHandler("cart", cart_command))
+    app.add_handler(
+        CallbackQueryHandler(cart_command, pattern=r"^view_cart_nav$")
+    )
+    app.add_handler(
+        CallbackQueryHandler(add_to_cart_handler, pattern=r"^add_to_cart_\d+$")
+    )
+    app.add_handler(
+        CallbackQueryHandler(
+            adjust_quantity_handler, pattern=r"^qty_(up|down)_\d+_\d+$"
+        )
     )

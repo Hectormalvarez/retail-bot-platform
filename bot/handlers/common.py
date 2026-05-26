@@ -1,12 +1,18 @@
+"""Welcome / start dashboard and shared utilities."""
+
+from __future__ import annotations
+
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import ContextTypes
+from telegram.ext import CommandHandler, ContextTypes
 
-from api_client import sync_user
+from context import BotContext
 
 logger = logging.getLogger(__name__)
 
+
+# ---- helpers (no DI needed – pure functions) ---------------------------
 
 def extract_user_context(update: Update) -> dict:
     """Helper to cleanly extract Telegram user metadata."""
@@ -34,26 +40,34 @@ async def clear_chat_footprint(update: Update, context: ContextTypes.DEFAULT_TYP
                 chat_id=update.effective_chat.id, message_id=last_menu_id
             )
         except Exception as exc:
-            logger.debug(f"Stale menu message already cleared: {exc}")
+            logger.debug("Stale menu message already cleared: %s", exc)
 
         context.user_data["active_menu_id"] = None
+
+
+# ---- handlers -----------------------------------------------------------
+
+_WELCOME_TEXT = "Welcome to the Retail Bot! Use the options below to navigate:"
+
+
+def _build_welcome_keyboard() -> InlineKeyboardMarkup:
+    keyboard = [
+        [InlineKeyboardButton("📦 Browse Catalog", callback_data="back_catalog")],
+        [InlineKeyboardButton("🛍️ View Your Cart", callback_data="view_cart_nav")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Greets the user, syncs profile data, and initiates a clean dashboard."""
     await clear_chat_footprint(update, context)
 
+    ctx: BotContext = context.application.bot_data["ctx"]
     user_ctx = extract_user_context(update)
-    await sync_user(user_ctx)
-
-    text = "Welcome to the Retail Bot! Use the options below to navigate:"
-    keyboard = [
-        [InlineKeyboardButton("📦 Browse Catalog", callback_data="back_catalog")],
-        [InlineKeyboardButton("🛍️ View Your Cart", callback_data="view_cart_nav")],
-    ]
+    await ctx.api.sync_user(user_ctx)
 
     sent_msg = await update.effective_chat.send_message(
-        text=text, reply_markup=InlineKeyboardMarkup(keyboard)
+        text=_WELCOME_TEXT, reply_markup=_build_welcome_keyboard()
     )
     context.user_data["active_menu_id"] = sent_msg.message_id
 
@@ -63,12 +77,19 @@ async def back_to_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    text = "Welcome to the Retail Bot! Use the options below to navigate:"
-    keyboard = [
-        [InlineKeyboardButton("📦 Browse Catalog", callback_data="back_catalog")],
-        [InlineKeyboardButton("🛍️ View Your Cart", callback_data="view_cart_nav")],
-    ]
-
     await query.edit_message_text(
-        text=text, reply_markup=InlineKeyboardMarkup(keyboard)
+        text=_WELCOME_TEXT, reply_markup=_build_welcome_keyboard()
     )
+
+
+# ---- registration -------------------------------------------------------
+
+
+def register_handlers(app) -> None:
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(
+        CommandHandler("catalog", start)
+    )  # legacy alias – main menu
+    app.add_handler(
+        CommandHandler("cancel", start)
+    )  # fallback command

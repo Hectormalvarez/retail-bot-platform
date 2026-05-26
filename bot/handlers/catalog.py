@@ -1,12 +1,19 @@
+"""Product catalog browsing via inline keyboards."""
+
+from __future__ import annotations
+
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import ContextTypes
+from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes
 
-from api_client import fetch_product_detail, fetch_products
+from context import BotContext
 from handlers.common import clear_chat_footprint
 
 logger = logging.getLogger(__name__)
+
+
+# ---- pure helpers (no DI) -----------------------------------------------
 
 
 def parse_product_id(callback_data: str) -> int:
@@ -30,16 +37,8 @@ def render_catalog_menu(products: list) -> tuple[str, list]:
     ]
     keyboard.extend(
         [
-            [
-                InlineKeyboardButton(
-                    "🛍️ View Your Cart", callback_data="view_cart_nav"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "🏠 Return to Main Menu", callback_data="back_start"
-                )
-            ],
+            [InlineKeyboardButton("🛍️ View Your Cart", callback_data="view_cart_nav")],
+            [InlineKeyboardButton("🏠 Return to Main Menu", callback_data="back_start")],
         ]
     )
     return "📦 *Available Products*:\nSelect an item to view details:", keyboard
@@ -65,19 +64,19 @@ def render_product_card(product: dict) -> tuple[str, list]:
             )
         ],
         [InlineKeyboardButton("🛍️ View Cart", callback_data="view_cart_nav")],
-        [
-            InlineKeyboardButton(
-                "⬅️ Back to Catalog", callback_data="back_catalog"
-            )
-        ],
+        [InlineKeyboardButton("⬅️ Back to Catalog", callback_data="back_catalog")],
     ]
     return card_text, keyboard
+
+
+# ---- handlers ------------------------------------------------------------
 
 
 async def catalog_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Executes /catalog command to fetch and display available store items."""
     await clear_chat_footprint(update, context)
-    products = await fetch_products()
+    ctx: BotContext = context.application.bot_data["ctx"]
+    products = await ctx.api.fetch_products()
 
     text, keyboard = render_catalog_menu(products)
     markup = InlineKeyboardMarkup(keyboard) if keyboard else None
@@ -88,13 +87,29 @@ async def catalog_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["active_menu_id"] = sent_msg.message_id
 
 
+async def back_to_catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles navigation callback requests to return users to the catalog."""
+    query = update.callback_query
+    await query.answer()
+
+    ctx: BotContext = context.application.bot_data["ctx"]
+    products = await ctx.api.fetch_products()
+    text, keyboard = render_catalog_menu(products)
+    markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+
+    await query.edit_message_text(
+        text=text, parse_mode="Markdown", reply_markup=markup
+    )
+
+
 async def view_product_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles callback interactions to display full item specifications."""
     query = update.callback_query
     await query.answer()
 
     product_id = parse_product_id(query.data)
-    product = await fetch_product_detail(product_id)
+    ctx: BotContext = context.application.bot_data["ctx"]
+    product = await ctx.api.fetch_product_detail(product_id)
 
     text, keyboard = render_product_card(product)
     markup = InlineKeyboardMarkup(keyboard) if keyboard else None
@@ -104,15 +119,17 @@ async def view_product_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
 
 
-async def back_to_catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handles navigation callback requests to return users to the catalog."""
-    query = update.callback_query
-    await query.answer()
+# ---- registration --------------------------------------------------------
 
-    products = await fetch_products()
-    text, keyboard = render_catalog_menu(products)
-    markup = InlineKeyboardMarkup(keyboard) if keyboard else None
 
-    await query.edit_message_text(
-        text=text, parse_mode="Markdown", reply_markup=markup
+def register_handlers(app) -> None:
+    app.add_handler(CommandHandler("catalog", catalog_command))
+    app.add_handler(
+        CallbackQueryHandler(view_product_detail, pattern=r"^view_prod_\d+$")
+    )
+    app.add_handler(
+        CallbackQueryHandler(back_to_catalog, pattern=r"^back_catalog$")
+    )
+    app.add_handler(
+        CallbackQueryHandler(back_to_catalog, pattern=r"^back_start$")
     )

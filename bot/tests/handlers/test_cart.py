@@ -1,8 +1,19 @@
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from handlers.cart import parse_quantity_action, render_cart_menu
+from handlers.cart import (
+    add_to_cart_handler,
+    adjust_quantity_handler,
+    cart_command,
+    parse_quantity_action,
+    render_cart_menu,
+)
+
+from api_client import MockApiClient
+
+
+# ---- pure helpers (no DI needed) ----------------------------------------
 
 
 def test_render_cart_menu_empty():
@@ -55,75 +66,131 @@ def test_parse_quantity_action_up():
     assert quantity == 2
 
 
+# ---- handlers that need app.bot_data["ctx"] ------------------------------
+
+
 @pytest.mark.asyncio
-async def test_add_to_cart_handler_answers_callback(mock_update):
-    """Smoke: add_to_cart_handler answers the callback query."""
+async def test_add_to_cart_handler_answers_callback():
+    """add_to_cart_handler uses DI to add product and answers callback."""
+    mock_update = MagicMock()
     mock_update.callback_query.data = "add_to_cart_5"
     mock_update.callback_query.from_user.id = 123
     mock_update.callback_query.answer = AsyncMock()
 
-    from handlers.cart import add_to_cart_handler
+    # Wire up a context with a MockApiClient that has the product
+    api = MockApiClient(
+        product_details={
+            5: {
+                "id": 5,
+                "name": "Test Widget",
+                "price": "19.99",
+                "category_name": "Widgets",
+                "stock": 10,
+                "description": "A widget",
+            }
+        }
+    )
+    ctx_app = MagicMock()
+    ctx_app.bot_data = {"ctx": MagicMock(api=api)}
 
-    with patch("handlers.cart.add_product_to_cart", return_value=True):
-        await add_to_cart_handler(mock_update, None)
+    ctx = MagicMock()
+    ctx.application = ctx_app
+
+    await add_to_cart_handler(mock_update, ctx)
 
     mock_update.callback_query.answer.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_cart_command_sends_new_message(mock_update, mock_context):
-    """Smoke: cart_command (command path) sends a new message."""
+async def test_add_to_cart_handler_failure_shows_error():
+    """add_to_cart_handler answers with error when API returns False."""
+    from unittest.mock import AsyncMock as AM, MagicMock as MM
+
+    mock_update = MM()
+    mock_update.callback_query.data = "add_to_cart_999"
+    mock_update.callback_query.from_user.id = 123
+    mock_update.callback_query.answer = AM()
+
+    # Build an API mock that returns failure
+    api = MockApiClient()
+    # Patch fetch_user_cart to return None → add_product_to_cart returns False
+    api.fetch_user_cart = AM(return_value=None)  # type: ignore
+
+    ctx_app = MM()
+    ctx_app.bot_data = {"ctx": MM(api=api)}
+
+    ctx = MM()
+    ctx.application = ctx_app
+
+    await add_to_cart_handler(mock_update, ctx)
+
+    mock_update.callback_query.answer.assert_called_once()
+    args, kwargs = mock_update.callback_query.answer.call_args
+    text = kwargs.get("text", args[0] if args else "")
+    assert "Could not modify cart" in text
+
+
+@pytest.mark.asyncio
+async def test_cart_command_sends_new_message(context_with_app):
+    """cart_command (command path) sends a new message via DI."""
+    mock_update = MagicMock()
     mock_update.callback_query = None
     mock_update.effective_user.id = 123
     mock_update.effective_chat.send_message = AsyncMock()
     mock_update.effective_chat.send_message.return_value.message_id = 200
 
-    mock_cart = {"items": [], "cart_total": "0.00"}
-
     from handlers.cart import cart_command
 
-    with (
-        patch("handlers.cart.fetch_user_cart", return_value=mock_cart),
-        patch("handlers.cart.clear_chat_footprint", new_callable=AsyncMock),
-    ):
-        await cart_command(mock_update, mock_context)
+    with patch("handlers.cart.clear_chat_footprint", AsyncMock()):
+        await cart_command(mock_update, context_with_app)
 
     mock_update.effective_chat.send_message.assert_called_once()
-    assert mock_context.user_data["active_menu_id"] == 200
+    assert context_with_app.user_data["active_menu_id"] == 200
 
 
 @pytest.mark.asyncio
-async def test_cart_command_edits_message(mock_update):
-    """Smoke: cart_command (callback path) edits the existing message."""
+async def test_cart_command_edits_message():
+    """cart_command (callback path) edits the existing message."""
+    api = MockApiClient()
+    ctx_app = MagicMock()
+    ctx_app.bot_data = {"ctx": MagicMock(api=api)}
+
+    ctx = MagicMock()
+    ctx.application = ctx_app
+
+    mock_update = MagicMock()
     mock_update.callback_query.answer = AsyncMock()
     mock_update.callback_query.message.edit_text = AsyncMock()
+    mock_update.effective_user.id = 123
 
-    mock_cart = {"items": [], "cart_total": "0.00"}
-
-    from handlers.cart import cart_command
-
-    with patch("handlers.cart.fetch_user_cart", return_value=mock_cart):
-        await cart_command(mock_update, None)
+    await cart_command(mock_update, ctx)
 
     mock_update.callback_query.message.edit_text.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_adjust_quantity_handler_edits_message(mock_update):
-    """Smoke: adjust_quantity_handler edits the message after quantity change."""
-    mock_update.callback_query.data = "qty_up_3_1"
+async def test_adjust_quantity_handler_edits_message():
+    """adjust_quantity_handler edits the message after quantity change."""
+    api = MockApiClient(
+        product_details={
+            5: {"id": 5, "name": "Widget", "price": "9.99"},
+        }
+    )
+    # Pre-populate a cart
+    await api.add_product_to_cart(123, 5)
+
+    ctx_app = MagicMock()
+    ctx_app.bot_data = {"ctx": MagicMock(api=api)}
+
+    ctx = MagicMock()
+    ctx.application = ctx_app
+
+    mock_update = MagicMock()
+    mock_update.callback_query.data = "qty_up_1_1"
     mock_update.callback_query.answer = AsyncMock()
     mock_update.callback_query.message.edit_text = AsyncMock()
     mock_update.effective_user.id = 123
 
-    mock_cart = {"items": [], "cart_total": "0.00"}
-
-    from handlers.cart import adjust_quantity_handler
-
-    with (
-        patch("handlers.cart.update_item_quantity", return_value=True),
-        patch("handlers.cart.fetch_user_cart", return_value=mock_cart),
-    ):
-        await adjust_quantity_handler(mock_update, None)
+    await adjust_quantity_handler(mock_update, ctx)
 
     mock_update.callback_query.message.edit_text.assert_called_once()

@@ -1,135 +1,318 @@
+from __future__ import annotations
+
 import logging
-import os
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Any
 
 import httpx
 
 logger = logging.getLogger(__name__)
-API_BASE_URL = os.getenv("API_URL", "http://api:8000/api/")
 
 
-async def fetch_products():
-    """Fetches product catalog data over the network mesh."""
-    logger.info("Dispatching API request to fetch products...")
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(f"{API_BASE_URL}products/")
-            response.raise_for_status()
-            data = response.json()
-            logger.info(f"Retrieved {len(data)} items from catalog.")
-            return data
-        except httpx.HTTPError as exc:
-            logger.error(f"API gateway connection failure: {exc}")
-            return []
+# ---------------------------------------------------------------------------
+# Interface (Protocol / ABC) – allows swapping HTTP for mocks in tests
+# ---------------------------------------------------------------------------
+
+class ApiClient(ABC):
+    """Abstract interface for the DRF backend API client."""
+
+    @abstractmethod
+    async def fetch_products(self) -> list[dict[str, Any]]: ...
+
+    @abstractmethod
+    async def sync_user(self, user_data: dict[str, Any]) -> None: ...
+
+    @abstractmethod
+    async def fetch_product_detail(
+        self, product_id: int
+    ) -> dict[str, Any] | None: ...
+
+    @abstractmethod
+    async def fetch_user_cart(
+        self, tg_id: int
+    ) -> dict[str, Any] | None: ...
+
+    @abstractmethod
+    async def add_product_to_cart(
+        self, tg_id: int, product_id: int
+    ) -> bool: ...
+
+    @abstractmethod
+    async def update_item_quantity(
+        self, item_id: int, new_qty: int
+    ) -> bool: ...
+
+    @abstractmethod
+    async def submit_order(
+        self, tg_id: int, shipping_address: str
+    ) -> dict[str, Any] | None: ...
 
 
-async def sync_user(user_data: dict):
-    """Saves or updates a user profile instantly inside PostgreSQL."""
-    tg_id = user_data["telegram_id"]
-    async with httpx.AsyncClient() as client:
-        try:
-            url = f"{API_BASE_URL}users/{tg_id}/"
-            res = await client.get(url)
+# ---------------------------------------------------------------------------
+# Concrete HTTP implementation
+# ---------------------------------------------------------------------------
 
-            if res.status_code == 404:
-                # User does not exist yet -> Create record
-                post_res = await client.post(f"{API_BASE_URL}users/", json=user_data)
-                post_res.raise_for_status()
-                logger.info(f"Registered new shopper profile: {tg_id}")
-            else:
-                # User profile exists -> Patch any changes (e.g. updated username)
-                patch_res = await client.patch(url, json=user_data)
-                patch_res.raise_for_status()
-                logger.info(f"Synchronized existing profile changes: {tg_id}")
-        except httpx.HTTPError as exc:
-            logger.error(f"Failed to sync user context {tg_id}: {exc}")
+class HttpApiClient(ApiClient):
+    """Production client that talks to the Django REST API over httpx."""
 
+    def __init__(self, base_url: str) -> None:
+        self._base_url = base_url.rstrip("/") + "/"
 
-async def fetch_product_detail(product_id: int):
-    """Fetches a single product's details from the DRF gateway."""
-    logger.info(f"Fetching details for product ID: {product_id}")
-    async with httpx.AsyncClient() as client:
-        try:
-            url = f"{API_BASE_URL}products/{product_id}/"
-            response = await client.get(url)
-            response.raise_for_status()
-            return response.json()
-        except httpx.HTTPError as exc:
-            logger.error(f"Failed to fetch product {product_id}: {exc}")
+    # ---- helpers ---------------------------------------------------------
+
+    def _url(self, path: str) -> str:
+        return f"{self._base_url}{path.lstrip('/')}"
+
+    async def _get(
+        self, path: str, **kwargs: Any
+    ) -> dict[str, Any] | list[dict[str, Any]] | None:
+        async with httpx.AsyncClient() as client:
+            try:
+                resp = await client.get(self._url(path), **kwargs)
+                resp.raise_for_status()
+                return resp.json()
+            except httpx.HTTPError as exc:
+                logger.error("GET %s failed: %s", path, exc)
+                return None
+
+    async def _post(
+        self, path: str, json: dict[str, Any] | None = None, **kwargs: Any
+    ) -> dict[str, Any] | None:
+        async with httpx.AsyncClient() as client:
+            try:
+                resp = await client.post(self._url(path), json=json, **kwargs)
+                resp.raise_for_status()
+                return resp.json()
+            except httpx.HTTPError as exc:
+                logger.error("POST %s failed: %s", path, exc)
+                return None
+
+    async def _patch(
+        self, path: str, json: dict[str, Any] | None = None, **kwargs: Any
+    ) -> dict[str, Any] | None:
+        async with httpx.AsyncClient() as client:
+            try:
+                resp = await client.patch(self._url(path), json=json, **kwargs)
+                resp.raise_for_status()
+                return resp.json()
+            except httpx.HTTPError as exc:
+                logger.error("PATCH %s failed: %s", path, exc)
+                return None
+
+    async def _delete(self, path: str, **kwargs: Any) -> bool:
+        async with httpx.AsyncClient() as client:
+            try:
+                resp = await client.delete(self._url(path), **kwargs)
+                resp.raise_for_status()
+                return True
+            except httpx.HTTPError as exc:
+                logger.error("DELETE %s failed: %s", path, exc)
+                return False
+
+    # ---- domain methods --------------------------------------------------
+
+    async def fetch_products(self) -> list[dict[str, Any]]:
+        data = await self._get("products/")
+        return data if isinstance(data, list) else []
+
+    async def sync_user(self, user_data: dict[str, Any]) -> None:
+        tg_id = user_data["telegram_id"]
+        existing = await self._get(f"users/{tg_id}/")
+        if existing is None:
+            await self._post("users/", json=user_data)
+            logger.info("Registered new shopper profile: %s", tg_id)
+        else:
+            await self._patch(f"users/{tg_id}/", json=user_data)
+            logger.info("Synchronized existing profile: %s", tg_id)
+
+    async def fetch_product_detail(
+        self, product_id: int
+    ) -> dict[str, Any] | None:
+        data = await self._get(f"products/{product_id}/")
+        return data if isinstance(data, dict) else None
+
+    async def fetch_user_cart(
+        self, tg_id: int
+    ) -> dict[str, Any] | None:
+        data = await self._get(f"carts/{tg_id}/")
+        if data is not None:
+            return data if isinstance(data, dict) else None
+        # Auto-create a cart on first access
+        created = await self._post("carts/", json={"user": tg_id})
+        if created is None:
             return None
+        data = await self._get(f"carts/{tg_id}/")
+        return data if isinstance(data, dict) else None
 
+    async def add_product_to_cart(
+        self, tg_id: int, product_id: int
+    ) -> bool:
+        cart = await self.fetch_user_cart(tg_id)
+        if not cart:
+            return False
 
-async def fetch_user_cart(tg_id: int):
-    """Retrieves the active cart layout for a specific Telegram user."""
-    async with httpx.AsyncClient() as client:
-        try:
-            res = await client.get(f"{API_BASE_URL}carts/{tg_id}/")
-            if res.status_code == 404:
-                # Auto-initialize database-backed cart if missing
-                create_res = await client.post(
-                    f"{API_BASE_URL}carts/", json={"user": tg_id}
-                )
-                create_res.raise_for_status()
-                res = await client.get(f"{API_BASE_URL}carts/{tg_id}/")
-            res.raise_for_status()
-            return res.json()
-        except httpx.HTTPError as exc:
-            logger.error(f"Cart synchronization error for {tg_id}: {exc}")
-            return None
+        existing_item = next(
+            (
+                i
+                for i in cart.get("items", [])
+                if i["product"] == product_id
+            ),
+            None,
+        )
 
-
-async def add_product_to_cart(tg_id: int, product_id: int):
-    """Increments a product volume or builds a new item row entry."""
-    cart = await fetch_user_cart(tg_id)
-    if not cart:
-        return False
-
-    # Extract match to avoid unique tuple constraints violations
-    existing_item = next((i for i in cart["items"] if i["product"] == product_id), None)
-
-    async with httpx.AsyncClient() as client:
-        try:
-            if existing_item:
-                url = f"{API_BASE_URL}cart-items/{existing_item['id']}/"
-                payload = {"quantity": existing_item["quantity"] + 1}
-                res = await client.patch(url, json=payload)
-            else:
-                url = f"{API_BASE_URL}cart-items/"
-                payload = {
+        if existing_item:
+            url = f"cart-items/{existing_item['id']}/"
+            result = await self._patch(
+                url, json={"quantity": existing_item["quantity"] + 1}
+            )
+            return result is not None
+        else:
+            result = await self._post(
+                "cart-items/",
+                json={
                     "cart": cart["id"],
                     "product": product_id,
                     "quantity": 1,
+                },
+            )
+            return result is not None
+
+    async def update_item_quantity(
+        self, item_id: int, new_qty: int
+    ) -> bool:
+        if new_qty <= 0:
+            return await self._delete(f"cart-items/{item_id}/")
+        result = await self._patch(
+            f"cart-items/{item_id}/", json={"quantity": new_qty}
+        )
+        return result is not None
+
+    async def submit_order(
+        self, tg_id: int, shipping_address: str
+    ) -> dict[str, Any] | None:
+        result = await self._post(
+            "orders/",
+            json={"user": tg_id, "shipping_address": shipping_address},
+        )
+        return result if isinstance(result, dict) else None
+
+
+# ---------------------------------------------------------------------------
+# In-memory mock for unit tests
+# ---------------------------------------------------------------------------
+
+@dataclass
+class MockApiClient(ApiClient):
+    """Fake in-memory client – no network calls, ideal for handler tests."""
+
+    products: list[dict] = None  # type: ignore[assignment]
+    product_details: dict[int, dict] = None  # type: ignore[assignment]
+    carts: dict[int, dict] = None  # type: ignore[assignment]
+    users: set[int] = None  # type: ignore[assignment]
+    next_cart_item_id: int = 1
+    next_order_id: int = 1
+
+    def __post_init__(self) -> None:
+        if self.products is None:
+            self.products = []
+        if self.product_details is None:
+            self.product_details = {}
+        if self.carts is None:
+            self.carts = {}
+        if self.users is None:
+            self.users = set()
+
+    async def fetch_products(self) -> list[dict]:
+        return self.products
+
+    async def sync_user(self, user_data: dict) -> None:
+        self.users.add(user_data["telegram_id"])
+
+    async def fetch_product_detail(
+        self, product_id: int
+    ) -> dict | None:
+        return self.product_details.get(product_id)
+
+    async def fetch_user_cart(self, tg_id: int) -> dict | None:
+        cart = self.carts.get(tg_id)
+        if cart is None:
+            # auto-create
+            cart = {"id": tg_id, "items": [], "cart_total": "0.00"}
+            self.carts[tg_id] = cart
+        return cart
+
+    async def add_product_to_cart(
+        self, tg_id: int, product_id: int
+    ) -> bool:
+        cart = await self.fetch_user_cart(tg_id)
+        if not cart:
+            return False
+        existing = next(
+            (i for i in cart["items"] if i["product"] == product_id), None
+        )
+        if existing:
+            existing["quantity"] += 1
+            existing["subtotal"] = str(
+                float(existing.get("subtotal", 0))
+                + float(
+                    self.product_details.get(product_id, {}).get(
+                        "price", 0
+                    )
+                )
+            )
+        else:
+            detail = self.product_details.get(product_id, {})
+            cart["items"].append(
+                {
+                    "id": self.next_cart_item_id,
+                    "product": product_id,
+                    "product_name": detail.get("name", "Unknown"),
+                    "quantity": 1,
+                    "subtotal": detail.get("price", "0.00"),
                 }
-                res = await client.post(url, json=payload)
-            res.raise_for_status()
-            return True
-        except httpx.HTTPError as exc:
-            logger.error(f"Failed to write cart item adjustment: {exc}")
-            return False
+            )
+            self.next_cart_item_id += 1
+        cart["cart_total"] = str(
+            sum(float(i["subtotal"]) for i in cart["items"])
+        )
+        return True
 
+    async def update_item_quantity(
+        self, item_id: int, new_qty: int
+    ) -> bool:
+        for cart in self.carts.values():
+            for item in cart["items"]:
+                if item["id"] == item_id:
+                    if new_qty <= 0:
+                        cart["items"].remove(item)
+                    else:
+                        item["quantity"] = new_qty
+                    cart["cart_total"] = str(
+                        sum(float(i["subtotal"]) for i in cart["items"])
+                    )
+                    return True
+        return False
 
-async def update_item_quantity(item_id: int, new_qty: int):
-    """Alters or deletes a cart item line row based on scale context."""
-    async with httpx.AsyncClient() as client:
-        try:
-            url = f"{API_BASE_URL}cart-items/{item_id}/"
-            if new_qty <= 0:
-                res = await client.delete(url)
-            else:
-                res = await client.patch(url, json={"quantity": new_qty})
-            res.raise_for_status()
-            return True
-        except httpx.HTTPError as exc:
-            logger.error(f"Failed updating cart item {item_id}: {exc}")
-            return False
-
-
-async def submit_order(tg_id: int, shipping_address: str):
-    async with httpx.AsyncClient() as client:
-        try:
-            payload = {"user": tg_id, "shipping_address": shipping_address}
-            res = await client.post(f"{API_BASE_URL}orders/", json=payload)
-            res.raise_for_status()
-            return res.json()
-        except httpx.HTTPError as exc:
-            logger.error(f"Order submission gateway failure: {exc}")
+    async def submit_order(
+        self, tg_id: int, shipping_address: str
+    ) -> dict | None:
+        cart = self.carts.get(tg_id)
+        if not cart or not cart["items"]:
             return None
+        order = {
+            "id": self.next_order_id,
+            "total_amount": cart["cart_total"],
+            "items": [
+                {
+                    "product_name": i["product_name"],
+                    "quantity": i["quantity"],
+                    "price_at_purchase": i["subtotal"],
+                }
+                for i in cart["items"]
+            ],
+        }
+        self.next_order_id += 1
+        cart["items"].clear()
+        cart["cart_total"] = "0.00"
+        return order

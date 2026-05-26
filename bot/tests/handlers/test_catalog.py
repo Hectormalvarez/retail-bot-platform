@@ -1,8 +1,20 @@
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from handlers.catalog import parse_product_id, render_catalog_menu, render_product_card
+from handlers.catalog import (
+    back_to_catalog,
+    catalog_command,
+    parse_product_id,
+    render_catalog_menu,
+    render_product_card,
+    view_product_detail,
+)
+
+from api_client import MockApiClient
+
+
+# ---- pure helpers (no DI needed) ----------------------------------------
 
 
 def test_render_catalog_menu_empty():
@@ -55,58 +67,70 @@ def test_parse_product_id():
     assert parse_product_id("qty_up_10_3") == 3
 
 
+# ---- handlers that need app.bot_data["ctx"] ------------------------------
+
+
 @pytest.mark.asyncio
-async def test_catalog_command_sends_new_message(mock_update, mock_context):
-    """Smoke: catalog_command sends a new message via send_message."""
+async def test_catalog_command_sends_new_message(
+    mock_update, context_with_app
+):
+    """catalog_command fetches products via DI and sends a new message."""
     mock_update.callback_query = None
     mock_update.effective_chat.send_message = AsyncMock()
     mock_update.effective_chat.send_message.return_value.message_id = 100
 
-    from handlers.catalog import catalog_command
-
-    with (
-        patch("handlers.catalog.fetch_products", return_value=[]),
-        patch("handlers.catalog.clear_chat_footprint", new_callable=AsyncMock),
-    ):
-        await catalog_command(mock_update, mock_context)
+    with patch("handlers.catalog.clear_chat_footprint", AsyncMock()):
+        await catalog_command(mock_update, context_with_app)
 
     mock_update.effective_chat.send_message.assert_called_once()
-    assert mock_context.user_data["active_menu_id"] == 100
+    assert context_with_app.user_data["active_menu_id"] == 100
 
 
 @pytest.mark.asyncio
-async def test_view_product_detail_edits_message(mock_update):
-    """Smoke: view_product_detail edits the existing message."""
+async def test_view_product_detail_edits_message():
+    """view_product_detail fetches product detail and edits the message."""
+    mock_update = MagicMock()
     mock_update.callback_query.data = "view_prod_1"
     mock_update.callback_query.answer = AsyncMock()
     mock_update.callback_query.edit_message_text = AsyncMock()
 
-    mock_product = {
-        "id": 1,
-        "name": "Test",
-        "category_name": "Gear",
-        "price": "10.00",
-        "stock": 5,
-        "description": "desc",
-    }
+    api = MockApiClient(
+        product_details={
+            1: {
+                "id": 1,
+                "name": "Test",
+                "category_name": "Gear",
+                "price": "10.00",
+                "stock": 5,
+                "description": "desc",
+            }
+        }
+    )
+    ctx_app = MagicMock()
+    ctx_app.bot_data = {"ctx": MagicMock(api=api)}
 
-    from handlers.catalog import view_product_detail
+    ctx = MagicMock()
+    ctx.application = ctx_app
 
-    with patch("handlers.catalog.fetch_product_detail", return_value=mock_product):
-        await view_product_detail(mock_update, None)
+    await view_product_detail(mock_update, ctx)
 
     mock_update.callback_query.edit_message_text.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_back_to_catalog_edits_message(mock_update):
-    """Smoke: back_to_catalog edits the existing message."""
+async def test_back_to_catalog_edits_message():
+    """back_to_catalog fetches products and edits the message."""
+    mock_update = MagicMock()
     mock_update.callback_query.answer = AsyncMock()
     mock_update.callback_query.edit_message_text = AsyncMock()
 
-    from handlers.catalog import back_to_catalog
+    api = MockApiClient()
+    ctx_app = MagicMock()
+    ctx_app.bot_data = {"ctx": MagicMock(api=api)}
 
-    with patch("handlers.catalog.fetch_products", return_value=[]):
-        await back_to_catalog(mock_update, None)
+    ctx = MagicMock()
+    ctx.application = ctx_app
+
+    await back_to_catalog(mock_update, ctx)
 
     mock_update.callback_query.edit_message_text.assert_called_once()

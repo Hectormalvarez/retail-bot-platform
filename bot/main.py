@@ -2,18 +2,12 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from telegram.ext import (
-    Application,
-    ApplicationBuilder,
-    CallbackQueryHandler,
-    CommandHandler,
-    ConversationHandler,
-    MessageHandler,
-    PicklePersistence,
-    filters,
-)
+from telegram.ext import Application, ApplicationBuilder, PicklePersistence
 
-from handlers import cart, catalog, checkout, common
+from config import BotConfig
+from context import BotContext
+from handlers import register_all
+from api_client import HttpApiClient
 
 load_dotenv()
 
@@ -24,67 +18,41 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def build_app(bot_token: str) -> Application:
-    """Assembles the bot application and registers all route handlers."""
-    os.makedirs("data", exist_ok=True)
-    persistence = PicklePersistence(filepath="data/bot_state.pickle")
+def build_app(config: BotConfig | None = None) -> Application:
+    """Assembles the bot application with DI context and auto-registered handlers.
 
-    app = ApplicationBuilder().token(bot_token).persistence(persistence).build()
+    Parameters
+    ----------
+    config:
+        Optional override – defaults to ``BotConfig.from_env()``.
+    """
+    if config is None:
+        config = BotConfig.from_env()
 
-    app.add_handler(CommandHandler("start", common.start))
-    app.add_handler(CommandHandler("catalog", catalog.catalog_command))
-    app.add_handler(CommandHandler("cart", cart.cart_command))
+    os.makedirs(config.data_dir, exist_ok=True)
+    persistence = PicklePersistence(filepath=config.persistence_path)
 
-    checkout_conv = ConversationHandler(
-        entry_points=[
-            CallbackQueryHandler(checkout.start_checkout, pattern=r"^checkout$")
-        ],
-        states={
-            checkout.WAITING_FOR_ADDRESS: [
-                MessageHandler(
-                    filters.TEXT & ~filters.COMMAND, checkout.capture_address
-                )
-            ],
-            checkout.CONFIRMING: [
-                CallbackQueryHandler(
-                    checkout.finalize_order,
-                    pattern=r"^confirm_checkout$",
-                ),
-                CallbackQueryHandler(
-                    checkout.cancel_checkout, pattern=r"^cancel_checkout$"
-                ),
-            ],
-        },
-        fallbacks=[CommandHandler("cancel", checkout.cancel_command_fallback)],
-        allow_reentry=True,
+    app = (
+        ApplicationBuilder()
+        .token(config.token)
+        .persistence(persistence)
+        .build()
     )
-    app.add_handler(checkout_conv)
 
-    app.add_handler(
-        CallbackQueryHandler(catalog.view_product_detail, pattern=r"^view_prod_\d+$")
+    # Inject shared context so handlers never import a concrete class.
+    ctx = BotContext(
+        config=config,
+        api=HttpApiClient(base_url=config.api_base_url),
     )
-    app.add_handler(
-        CallbackQueryHandler(catalog.back_to_catalog, pattern=r"^back_catalog$")
-    )
-    app.add_handler(CallbackQueryHandler(common.back_to_start, pattern=r"^back_start$"))
-    app.add_handler(CallbackQueryHandler(cart.cart_command, pattern=r"^view_cart_nav$"))
-    app.add_handler(
-        CallbackQueryHandler(cart.add_to_cart_handler, pattern=r"^add_to_cart_\d+$")
-    )
-    app.add_handler(
-        CallbackQueryHandler(
-            cart.adjust_quantity_handler, pattern=r"^qty_(up|down)_\d+_\d+$"
-        )
-    )
+    app.bot_data["ctx"] = ctx
+
+    # Auto-discover and register all handler modules.
+    register_all(app)
 
     return app
 
 
 if __name__ == "__main__":
-    token = os.getenv("TELEGRAM_TOKEN")
-    if not token:
-        raise ValueError("TELEGRAM_TOKEN not set in .env")
-
-    logger.info("Initializing modular Telegram bot routing map...")
-    application = build_app(token)
+    logger.info("Starting Retail Bot...")
+    application = build_app()
     application.run_polling()

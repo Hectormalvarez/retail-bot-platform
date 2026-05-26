@@ -38,7 +38,11 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "--cov=. --cov-report=term-missing"
 filterwarnings = [
-    "ignore::telegram.warnings.PTBUserWarning"
+    "ignore::telegram.warnings.PTBUserWarning",
+    # pytest-mock emits RuntimeWarning when MagicMock.raise_for_status
+    # triggers an async mock that is never awaited. The exception is
+    # caught synchronously by httpx.HTTPError handlers — benign.
+    'ignore:coroutine .* was never awaited:RuntimeWarning',
 ]
 
 [tool.setuptools]
