@@ -5,10 +5,10 @@ import pytest
 from handlers.common import (
     back_to_start,
     clear_chat_footprint,
+    render_orders_history,
     render_welcome_dashboard,
     start,
 )
-
 
 # ---- pure helpers (no DI needed) ----------------------------------------
 
@@ -60,6 +60,45 @@ async def test_clear_chat_footprint_handles_delete_exception():
 
     # Should not raise, and user_data should still be cleared
     assert context.user_data["active_menu_id"] is None
+
+
+# ---- render_orders_history (pure – no DI, no asyncio) ------------------
+
+
+def test_render_orders_history_no_orders():
+    """An empty orders list returns the 'no past orders' message and no buttons."""
+    text, keyboard = render_orders_history([])
+
+    assert "You have no past orders yet" in text
+    assert keyboard == []
+
+
+def test_render_orders_history_with_two_orders():
+    """A list of 2 orders produces 3 keyboard rows (2 orders + 1 back button)."""
+    orders = [
+        {"id": 101, "total_amount": "49.99"},
+        {"id": 202, "total_amount": "125.00"},
+    ]
+
+    text, keyboard = render_orders_history(orders)
+
+    # Text assertions
+    assert "Your Past Orders" in text
+    assert "Select an order to view its receipt breakdown" in text
+
+    # Button count: 3 rows (2 order buttons + 1 back button)
+    assert len(keyboard) == 3
+
+    # Order button assertions
+    assert keyboard[0][0].text == "📦 Order #101 — $49.99"
+    assert keyboard[0][0].callback_data == "view_old_order_101"
+
+    assert keyboard[1][0].text == "📦 Order #202 — $125.00"
+    assert keyboard[1][0].callback_data == "view_old_order_202"
+
+    # Back button assertion
+    assert keyboard[2][0].text == "⬅️ Back to Main Menu"
+    assert keyboard[2][0].callback_data == "back_start"
 
 
 # ---- render_welcome_dashboard (pure – no DI, no asyncio) ----------------

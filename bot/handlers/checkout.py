@@ -16,7 +16,7 @@ from telegram.ext import (
 
 from context import BotContext
 from handlers.cart import render_cart_menu
-from handlers.common import clear_chat_footprint
+from handlers.common import clear_chat_footprint, render_orders_history
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +97,27 @@ def compute_address_label(addresses: list[dict]) -> str:
     return f"Address #{len(addresses) + 1}"
 
 
+async def view_history_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles the "View Order History" callback button.
+
+    Fetches the user's past orders from the API and renders an order history
+    menu using the pure :func:`render_orders_history` presenter.
+    """
+    query = update.callback_query
+    await query.answer()
+
+    tg_id = query.from_user.id
+    ctx: BotContext = context.application.bot_data["ctx"]
+    orders = await ctx.api.fetch_user_orders(tg_id)
+
+    text_body, keyboard = render_orders_history(orders)
+    await query.edit_message_text(
+        text=text_body,
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard) if keyboard else None,
+    )
+
+
 # ---- handlers ------------------------------------------------------------
 
 
@@ -111,7 +132,13 @@ async def start_checkout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await query.edit_message_text(
             "🛒 Your cart is empty! Add items before checking out.",
             reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("📦 Browse Catalog", callback_data="back_catalog")]]
+                [
+                    [
+                        InlineKeyboardButton(
+                            "📦 Browse Catalog", callback_data="back_catalog"
+                        )
+                    ]
+                ]
             ),
         )
         return ConversationHandler.END
@@ -376,5 +403,8 @@ def register_handlers(app) -> None:
         },
         fallbacks=[CommandHandler("cancel", cancel_command_fallback)],
         allow_reentry=True,
+    )
+    app.add_handler(
+        CallbackQueryHandler(view_history_handler, pattern=r"^view_history_nav$")
     )
     app.add_handler(checkout_conv)

@@ -23,6 +23,48 @@ _ORDER_STATUS_LABELS = {
 }
 
 
+def render_orders_history(
+    orders: list[dict],
+) -> tuple[str, list[list[InlineKeyboardButton]]]:
+    """Render the order history menu text and inline keyboard layout.
+
+    This is a pure function with no I/O side effects.
+
+    Parameters
+    ----------
+    orders : list[dict]
+        The user's past orders. Each dict should have at least
+        ``{"id": int, "total_amount": str}``.
+
+    Returns
+    -------
+    tuple[str, list[list[InlineKeyboardButton]]]
+        The formatted menu text and the inline keyboard grid.
+    """
+    if not orders:
+        return "📜 *You have no past orders yet.*", []
+
+    text_body = (
+        "📜 *Your Past Orders:*\n"
+        "Select an order to view its receipt breakdown:"
+    )
+
+    keyboard: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                f"📦 Order #{o['id']} — ${o['total_amount']}",
+                callback_data=f"view_old_order_{o['id']}",
+            )
+        ]
+        for o in orders
+    ]
+    keyboard.append(
+        [InlineKeyboardButton("⬅️ Back to Main Menu", callback_data="back_start")]
+    )
+
+    return text_body, keyboard
+
+
 def render_welcome_dashboard(
     user_name: str,
     cart: dict | None,

@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from telegram.ext import ConversationHandler
 
+from api_client import MockApiClient
 from handlers.checkout import (
     ASK_SAVE_ADDRESS,
     CONFIRMING,
@@ -21,10 +22,8 @@ from handlers.checkout import (
     save_address_and_confirm,
     skip_save_confirm,
     start_checkout,
+    view_history_handler,
 )
-
-from api_client import MockApiClient
-
 
 # ---- pure helpers (no DI needed) ----------------------------------------
 
@@ -85,7 +84,7 @@ def test_compute_address_label():
     assert compute_address_label([{"id": 1}, {"id": 2}]) == "Address #3"
 
 
-# ---- handlers that need app.bot_data["ctx"] ------------------------------
+# ---- view_history_handler tests -----------------------------------------
 
 
 def _make_context(api=None):
@@ -98,6 +97,66 @@ def _make_context(api=None):
     ctx.application = ctx_app
     ctx.user_data = {}
     return ctx
+
+
+@pytest.mark.asyncio
+async def test_view_history_handler_with_no_orders():
+    """view_history_handler shows 'no past orders' when no orders exist."""
+    api = MockApiClient()
+    ctx = _make_context(api)
+
+    update = MagicMock()
+    update.callback_query = AsyncMock()
+    update.callback_query.from_user.id = 123
+
+    await view_history_handler(update, ctx)
+
+    update.callback_query.answer.assert_called_once()
+    update.callback_query.edit_message_text.assert_called_once()
+
+    call_args = update.callback_query.edit_message_text.call_args[1]
+    assert "You have no past orders yet" in call_args["text"]
+    assert call_args["parse_mode"] == "Markdown"
+    assert call_args["reply_markup"] is None
+
+
+@pytest.mark.asyncio
+async def test_view_history_handler_with_orders():
+    """view_history_handler fetches orders and renders order history menu."""
+    api = MockApiClient(
+        product_details={1: {"id": 1, "name": "Widget", "price": "9.99"}}
+    )
+    # Pre-populate orders via the checkout flow
+    await api.add_product_to_cart(123, 1)
+    await api.submit_order(123, "123 Main St")
+    await api.add_product_to_cart(123, 1)
+    await api.submit_order(123, "456 Oak Ave")
+
+    ctx = _make_context(api)
+
+    update = MagicMock()
+    update.callback_query = AsyncMock()
+    update.callback_query.from_user.id = 123
+
+    await view_history_handler(update, ctx)
+
+    update.callback_query.answer.assert_called_once()
+    update.callback_query.edit_message_text.assert_called_once()
+
+    call_args = update.callback_query.edit_message_text.call_args[1]
+    assert "Your Past Orders" in call_args["text"]
+
+    reply_markup = call_args["reply_markup"]
+    assert reply_markup is not None
+
+    # The inline keyboard should have 3 rows: 2 orders + 1 back button
+    assert len(reply_markup.inline_keyboard) == 3
+    assert "Order #1" in reply_markup.inline_keyboard[0][0].text
+    assert "Order #2" in reply_markup.inline_keyboard[1][0].text
+    assert "Back to Main Menu" in reply_markup.inline_keyboard[2][0].text
+
+
+# ---- handlers that need app.bot_data["ctx"] ------------------------------
 
 
 @pytest.mark.asyncio
@@ -118,7 +177,7 @@ async def test_start_checkout_with_empty_cart_aborts():
 
 @pytest.mark.asyncio
 async def test_start_checkout_with_items_no_addresses_asks_text():
-    """start_checkout transitions to WAITING_FOR_ADDRESS when cart has items but no saved addresses."""
+    """Transitions to WAITING_FOR_ADDRESS when cart has items but no saved addresses."""
     api = MockApiClient(
         product_details={1: {"id": 1, "name": "T-Shirt", "price": "25.00"}}
     )
@@ -137,7 +196,7 @@ async def test_start_checkout_with_items_no_addresses_asks_text():
 
 @pytest.mark.asyncio
 async def test_start_checkout_with_saved_addresses_shows_selection():
-    """start_checkout transitions to SELECTING_ADDRESS when cart has items and saved addresses exist."""
+    """Transitions to SELECTING_ADDRESS when cart has items + saved addresses exist."""
     api = MockApiClient(
         product_details={1: {"id": 1, "name": "T-Shirt", "price": "25.00"}}
     )
