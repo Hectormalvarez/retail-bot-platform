@@ -7,6 +7,8 @@ from handlers.checkout import (
     CONFIRMING,
     WAITING_FOR_ADDRESS,
     capture_address,
+    render_order_confirmation,
+    render_order_receipt,
     start_checkout,
 )
 
@@ -65,3 +67,40 @@ async def test_capture_address_transitions_to_confirming(mocker):
     assert context.user_data["checkout_address"] == "123 Main St"
     assert context.user_data["active_menu_id"] == 999
     assert state == CONFIRMING
+
+
+def test_render_order_confirmation():
+    """Verifies the order confirmation preview text and keyboard layout."""
+    cart = {
+        "items": [
+            {"product_name": "Mug", "quantity": 2, "subtotal": "30.00"}
+        ],
+        "cart_total": "30.00",
+    }
+    text, keyboard = render_order_confirmation(cart, "123 Main St")
+
+    assert "Confirm Your Order Selection" in text
+    assert "123 Main St" in text
+    assert "Mug" in text
+    assert "30.00" in text
+    assert len(keyboard) == 2
+    assert keyboard[0][0].callback_data == "confirm_checkout"
+    assert keyboard[1][0].callback_data == "cancel_checkout"
+
+
+def test_render_order_receipt():
+    """Verifies the completed order receipt text after checkout."""
+    order_data = {
+        "id": 42,
+        "items": [
+            {"product_name": "T-Shirt", "quantity": 1, "price_at_purchase": "25.00"}
+        ],
+        "total_amount": "25.00",
+    }
+    text, keyboard = render_order_receipt(order_data, "456 Side St")
+
+    assert "Order #42 Confirmed" in text
+    assert "456 Side St" in text
+    assert "T-Shirt" in text
+    assert "25.00" in text
+    assert keyboard == []
