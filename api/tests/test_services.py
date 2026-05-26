@@ -5,6 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 from unittest.mock import Mock, MagicMock
 
+from store.cart_service import CartService
 from store.repositories import (
     DjangoCartRepo,
     DjangoOrderRepo,
@@ -208,3 +209,142 @@ def test_create_order_calculates_total_correctly():
     order_repo.create.assert_called_once()
     # total = 10*2 + 20*3 = 80
     assert order_repo.create.call_args[1]["total_amount"] == Decimal("80.00")
+
+
+# ---------------------------------------------------------------------------
+# CartService tests
+# ---------------------------------------------------------------------------
+
+
+def _make_cart_service(mocks: dict | None = None) -> CartService:
+    """Build a CartService with all mocked repos (or defaults)."""
+    defaults = {
+        "user_repo": Mock(spec=DjangoUserRepo),
+        "cart_repo": Mock(spec=DjangoCartRepo),
+        "product_repo": Mock(spec=DjangoProductRepo),
+    }
+    if mocks:
+        defaults.update(mocks)
+    return CartService(**defaults)
+
+
+def test_cart_add_new_item():
+    """Adding a product not already in cart -> cart_repo.add_item called with quantity=1."""
+    mock_user = MagicMock()
+    mock_cart = MagicMock()
+
+    user_repo = Mock(spec=DjangoUserRepo)
+    user_repo.get_by_telegram.return_value = mock_user
+    cart_repo = Mock(spec=DjangoCartRepo)
+    cart_repo.get_or_create.return_value = mock_cart
+    cart_repo.find_item.return_value = None  # not in cart
+    product_repo = Mock(spec=DjangoProductRepo)
+    mock_product = MagicMock()
+    product_repo.get_by_id.return_value = mock_product
+
+    service = _make_cart_service({
+        "user_repo": user_repo,
+        "cart_repo": cart_repo,
+        "product_repo": product_repo,
+    })
+    result = service.add_or_increment(1, 42)
+
+    assert result is not None
+    cart_repo.get_or_create.assert_called_once_with(mock_user)
+    cart_repo.find_item.assert_called_once_with(mock_cart, 42)
+    cart_repo.add_item.assert_called_once_with(mock_cart, mock_product)
+
+
+def test_cart_add_existing_item_increments():
+    """Adding a product already in cart -> increment_item called, no new item."""
+    mock_user = MagicMock()
+    mock_cart = MagicMock()
+    mock_existing = MagicMock()
+
+    user_repo = Mock(spec=DjangoUserRepo)
+    user_repo.get_by_telegram.return_value = mock_user
+    cart_repo = Mock(spec=DjangoCartRepo)
+    cart_repo.get_or_create.return_value = mock_cart
+    cart_repo.find_item.return_value = mock_existing
+
+    service = _make_cart_service({"user_repo": user_repo, "cart_repo": cart_repo})
+    result = service.add_or_increment(1, 42)
+
+    assert result is mock_existing
+    cart_repo.increment_item.assert_called_once_with(mock_existing)
+    cart_repo.add_item.assert_not_called()
+
+
+def test_cart_add_invalid_user_returns_none():
+    """Adding with non-existent user -> returns None."""
+    user_repo = Mock(spec=DjangoUserRepo)
+    user_repo.get_by_telegram.side_effect = Exception("User not found")
+
+    service = _make_cart_service({"user_repo": user_repo})
+    result = service.add_or_increment(999, 42)
+
+    assert result is None
+
+
+def test_cart_add_invalid_product_returns_none():
+    """Adding with non-existent product -> returns None."""
+    mock_user = MagicMock()
+    mock_cart = MagicMock()
+
+    user_repo = Mock(spec=DjangoUserRepo)
+    user_repo.get_by_telegram.return_value = mock_user
+    cart_repo = Mock(spec=DjangoCartRepo)
+    cart_repo.get_or_create.return_value = mock_cart
+    cart_repo.find_item.return_value = None
+    product_repo = Mock(spec=DjangoProductRepo)
+    product_repo.get_by_id.side_effect = Exception("Product not found")
+
+    service = _make_cart_service({
+        "user_repo": user_repo,
+        "cart_repo": cart_repo,
+        "product_repo": product_repo,
+    })
+    result = service.add_or_increment(1, 99999)
+
+    assert result is None
+
+
+def test_cart_update_quantity_to_zero_deletes_item():
+    """Updating quantity to 0 -> item deleted, returns None."""
+    mock_item = MagicMock()
+
+    cart_repo = Mock(spec=DjangoCartRepo)
+    cart_repo.get_item.return_value = mock_item
+
+    service = _make_cart_service({"cart_repo": cart_repo})
+    result = service.update_quantity(1, 0)
+
+    assert result is None
+    cart_repo.delete_item.assert_called_once_with(mock_item)
+    cart_repo.update_item_quantity.assert_not_called()
+
+
+def test_cart_update_quantity_positive():
+    """Updating quantity to positive number -> update_item_quantity called."""
+    mock_item = MagicMock()
+
+    cart_repo = Mock(spec=DjangoCartRepo)
+    cart_repo.get_item.return_value = mock_item
+
+    service = _make_cart_service({"cart_repo": cart_repo})
+    result = service.update_quantity(1, 5)
+
+    assert result is mock_item
+    cart_repo.update_item_quantity.assert_called_once_with(mock_item, 5)
+    cart_repo.delete_item.assert_not_called()
+
+
+def test_cart_update_quantity_nonexistent_item_returns_none():
+    """Updating quantity for non-existent item -> returns None."""
+    cart_repo = Mock(spec=DjangoCartRepo)
+    cart_repo.get_item.side_effect = Exception("CartItem not found")
+
+    service = _make_cart_service({"cart_repo": cart_repo})
+    result = service.update_quantity(999, 1)
+
+    assert result is None

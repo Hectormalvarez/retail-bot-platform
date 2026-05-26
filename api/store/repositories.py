@@ -7,24 +7,41 @@ from decimal import Decimal
 from .models import Cart, CartItem, Order, OrderItem, Product, TelegramUser
 
 
-class DjangoUserRepo:
-    """Wraps TelegramUser ORM queries."""
-
-    def get_by_telegram(self, telegram_id: int) -> TelegramUser:
-        return TelegramUser.objects.get(telegram_id=telegram_id)
-
-
 class DjangoCartRepo:
     """Wraps Cart and CartItem ORM queries."""
 
     def get_by_user(self, user: TelegramUser) -> Cart:
         return Cart.objects.get(user=user)
 
+    def get_or_create(self, user: TelegramUser) -> Cart:
+        cart, _ = Cart.objects.get_or_create(user=user)
+        return cart
+
     def get_items(self, cart: Cart) -> list[CartItem]:
         return list(cart.items.select_related("product").all())
 
     def delete_items(self, cart: Cart) -> None:
         cart.items.all().delete()
+
+    def find_item(self, cart: Cart, product_id: int) -> CartItem | None:
+        return cart.items.filter(product_id=product_id).first()
+
+    def get_item(self, item_id: int) -> CartItem:
+        return CartItem.objects.get(id=item_id)
+
+    def increment_item(self, item: CartItem) -> None:
+        item.quantity += 1
+        item.save(update_fields=["quantity"])
+
+    def add_item(self, cart: Cart, product: Product, quantity: int = 1) -> CartItem:
+        return CartItem.objects.create(cart=cart, product=product, quantity=quantity)
+
+    def update_item_quantity(self, item: CartItem, quantity: int) -> None:
+        item.quantity = quantity
+        item.save(update_fields=["quantity"])
+
+    def delete_item(self, item: CartItem) -> None:
+        item.delete()
 
 
 class DjangoProductRepo:
@@ -39,6 +56,13 @@ class DjangoProductRepo:
     def decrement_stock(self, product: Product, quantity: int) -> None:
         product.stock -= quantity
         product.save(update_fields=["stock"])
+
+
+class DjangoUserRepo:
+    """Wraps TelegramUser ORM queries."""
+
+    def get_by_telegram(self, telegram_id: int) -> TelegramUser:
+        return TelegramUser.objects.get(telegram_id=telegram_id)
 
 
 class DjangoOrderRepo:
