@@ -1,3 +1,4 @@
+from django.db import transaction
 from rest_framework import status, viewsets
 from rest_framework.response import Response
 from .models import Cart, CartItem, Category, Order, OrderItem, Product, TelegramUser
@@ -52,7 +53,8 @@ class OrderViewSet(viewsets.ModelViewSet):
         user_id = request.data.get("user")
         shipping_address = request.data.get("shipping_address")
 
-        order, error = self._order_service.create_order(user_id, shipping_address)
+        with transaction.atomic():
+            order, error = self._order_service.create_order(user_id, shipping_address)
         if error:
             return Response({"error": error}, status=status.HTTP_400_BAD_REQUEST)
 

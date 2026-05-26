@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db import transaction
-
 from .models import Order
 from .repositories import (
     DjangoCartRepo,
@@ -19,6 +17,7 @@ class OrderService:
     """Handles the checkout flow – stock validation, order creation, cart cleanup.
 
     Accepts injected repository instances so it can be unit-tested without a DB.
+    Transaction management is the caller's responsibility (typically the view).
     """
 
     def __init__(
@@ -33,7 +32,6 @@ class OrderService:
         self.products = product_repo or DjangoProductRepo()
         self.orders = order_repo or DjangoOrderRepo()
 
-    @transaction.atomic
     def create_order(
         self, user_id: int, shipping_address: str
     ) -> tuple[Order | None, str | None]:
