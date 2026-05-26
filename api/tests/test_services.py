@@ -252,7 +252,7 @@ def test_cart_add_new_item():
     assert result is not None
     cart_repo.get_or_create.assert_called_once_with(mock_user)
     cart_repo.find_item.assert_called_once_with(mock_cart, 42)
-    cart_repo.add_item.assert_called_once_with(mock_cart, mock_product)
+    cart_repo.add_item.assert_called_once_with(mock_cart, mock_product, quantity=1)
 
 
 def test_cart_add_existing_item_increments():
