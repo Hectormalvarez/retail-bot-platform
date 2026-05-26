@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 # Interface (Protocol / ABC) – allows swapping HTTP for mocks in tests
 # ---------------------------------------------------------------------------
 
+
 class ApiClient(ABC):
     """Abstract interface for the DRF backend API client."""
 
@@ -24,24 +25,16 @@ class ApiClient(ABC):
     async def sync_user(self, user_data: dict[str, Any]) -> None: ...
 
     @abstractmethod
-    async def fetch_product_detail(
-        self, product_id: int
-    ) -> dict[str, Any] | None: ...
+    async def fetch_product_detail(self, product_id: int) -> dict[str, Any] | None: ...
 
     @abstractmethod
-    async def fetch_user_cart(
-        self, tg_id: int
-    ) -> dict[str, Any] | None: ...
+    async def fetch_user_cart(self, tg_id: int) -> dict[str, Any] | None: ...
 
     @abstractmethod
-    async def add_product_to_cart(
-        self, tg_id: int, product_id: int
-    ) -> bool: ...
+    async def add_product_to_cart(self, tg_id: int, product_id: int) -> bool: ...
 
     @abstractmethod
-    async def update_item_quantity(
-        self, item_id: int, new_qty: int
-    ) -> bool: ...
+    async def update_item_quantity(self, item_id: int, new_qty: int) -> bool: ...
 
     @abstractmethod
     async def submit_order(
@@ -49,9 +42,7 @@ class ApiClient(ABC):
     ) -> dict[str, Any] | None: ...
 
     @abstractmethod
-    async def fetch_addresses(
-        self, tg_id: int
-    ) -> list[dict[str, Any]]: ...
+    async def fetch_addresses(self, tg_id: int) -> list[dict[str, Any]]: ...
 
     @abstractmethod
     async def create_address(
@@ -59,19 +50,16 @@ class ApiClient(ABC):
     ) -> dict[str, Any] | None: ...
 
     @abstractmethod
-    async def delete_address(
-        self, address_id: int
-    ) -> bool: ...
+    async def delete_address(self, address_id: int) -> bool: ...
 
     @abstractmethod
-    async def fetch_user_orders(
-        self, tg_id: int
-    ) -> list[dict[str, Any]]: ...
+    async def fetch_user_orders(self, tg_id: int) -> list[dict[str, Any]]: ...
 
 
 # ---------------------------------------------------------------------------
 # Concrete HTTP implementation
 # ---------------------------------------------------------------------------
+
 
 class HttpApiClient(ApiClient):
     """Production client that talks to the Django REST API over httpx."""
@@ -146,15 +134,11 @@ class HttpApiClient(ApiClient):
             await self._patch(f"users/{tg_id}/", json=user_data)
             logger.info("Synchronized existing profile: %s", tg_id)
 
-    async def fetch_product_detail(
-        self, product_id: int
-    ) -> dict[str, Any] | None:
+    async def fetch_product_detail(self, product_id: int) -> dict[str, Any] | None:
         data = await self._get(f"products/{product_id}/")
         return data if isinstance(data, dict) else None
 
-    async def fetch_user_cart(
-        self, tg_id: int
-    ) -> dict[str, Any] | None:
+    async def fetch_user_cart(self, tg_id: int) -> dict[str, Any] | None:
         data = await self._get(f"carts/{tg_id}/")
         if data is not None:
             return data if isinstance(data, dict) else None
@@ -165,9 +149,7 @@ class HttpApiClient(ApiClient):
         data = await self._get(f"carts/{tg_id}/")
         return data if isinstance(data, dict) else None
 
-    async def add_product_to_cart(
-        self, tg_id: int, product_id: int
-    ) -> bool:
+    async def add_product_to_cart(self, tg_id: int, product_id: int) -> bool:
         cart = await self.fetch_user_cart(tg_id)
         if not cart:
             return False
@@ -182,14 +164,10 @@ class HttpApiClient(ApiClient):
         )
         return result is not None
 
-    async def update_item_quantity(
-        self, item_id: int, new_qty: int
-    ) -> bool:
+    async def update_item_quantity(self, item_id: int, new_qty: int) -> bool:
         if new_qty <= 0:
             return await self._delete(f"cart-items/{item_id}/")
-        result = await self._patch(
-            f"cart-items/{item_id}/", json={"quantity": new_qty}
-        )
+        result = await self._patch(f"cart-items/{item_id}/", json={"quantity": new_qty})
         return result is not None
 
     async def submit_order(
@@ -201,9 +179,7 @@ class HttpApiClient(ApiClient):
         )
         return result if isinstance(result, dict) else None
 
-    async def fetch_addresses(
-        self, tg_id: int
-    ) -> list[dict[str, Any]]:
+    async def fetch_addresses(self, tg_id: int) -> list[dict[str, Any]]:
         data = await self._get(f"addresses/?user={tg_id}")
         return data if isinstance(data, list) else []
 
@@ -216,14 +192,10 @@ class HttpApiClient(ApiClient):
         )
         return result if isinstance(result, dict) else None
 
-    async def delete_address(
-        self, address_id: int
-    ) -> bool:
+    async def delete_address(self, address_id: int) -> bool:
         return await self._delete(f"addresses/{address_id}/")
 
-    async def fetch_user_orders(
-        self, tg_id: int
-    ) -> list[dict[str, Any]]:
+    async def fetch_user_orders(self, tg_id: int) -> list[dict[str, Any]]:
         data = await self._get(f"orders/?user={tg_id}")
         return data if isinstance(data, list) else []
 
@@ -231,6 +203,7 @@ class HttpApiClient(ApiClient):
 # ---------------------------------------------------------------------------
 # In-memory mock for unit tests
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class MockApiClient(ApiClient):
@@ -266,9 +239,7 @@ class MockApiClient(ApiClient):
     async def sync_user(self, user_data: dict) -> None:
         self.users.add(user_data["telegram_id"])
 
-    async def fetch_product_detail(
-        self, product_id: int
-    ) -> dict | None:
+    async def fetch_product_detail(self, product_id: int) -> dict | None:
         return self.product_details.get(product_id)
 
     async def fetch_user_cart(self, tg_id: int) -> dict | None:
@@ -279,18 +250,14 @@ class MockApiClient(ApiClient):
             self.carts[tg_id] = cart
         return cart
 
-    async def add_product_to_cart(
-        self, tg_id: int, product_id: int
-    ) -> bool:
+    async def add_product_to_cart(self, tg_id: int, product_id: int) -> bool:
         cart = await self.fetch_user_cart(tg_id)
         if not cart:
             return False
         detail = self.product_details.get(product_id, {})
         unit_price = float(detail.get("price", 0))
 
-        existing = next(
-            (i for i in cart["items"] if i["product"] == product_id), None
-        )
+        existing = next((i for i in cart["items"] if i["product"] == product_id), None)
         if existing:
             existing["quantity"] += 1
             existing["subtotal"] = f"{unit_price * existing['quantity']:.2f}"
@@ -308,9 +275,7 @@ class MockApiClient(ApiClient):
         cart["cart_total"] = f"{sum(float(i['subtotal']) for i in cart['items']):.2f}"
         return True
 
-    async def update_item_quantity(
-        self, item_id: int, new_qty: int
-    ) -> bool:
+    async def update_item_quantity(self, item_id: int, new_qty: int) -> bool:
         for cart in self.carts.values():
             for item in cart["items"]:
                 if item["id"] == item_id:
@@ -319,9 +284,9 @@ class MockApiClient(ApiClient):
                     else:
                         item["quantity"] = new_qty
                         unit_price = float(
-                            self.product_details.get(
-                                item["product"], {}
-                            ).get("price", 0)
+                            self.product_details.get(item["product"], {}).get(
+                                "price", 0
+                            )
                         )
                         item["subtotal"] = f"{unit_price * new_qty:.2f}"
                     cart_total = sum(float(i["subtotal"]) for i in cart["items"])
@@ -329,9 +294,7 @@ class MockApiClient(ApiClient):
                     return True
         return False
 
-    async def submit_order(
-        self, tg_id: int, shipping_address: str
-    ) -> dict | None:
+    async def submit_order(self, tg_id: int, shipping_address: str) -> dict | None:
         cart = self.carts.get(tg_id)
         if not cart or not cart["items"]:
             return None
@@ -354,14 +317,10 @@ class MockApiClient(ApiClient):
         cart["cart_total"] = "0.00"
         return order
 
-    async def fetch_user_orders(
-        self, tg_id: int
-    ) -> list[dict]:
+    async def fetch_user_orders(self, tg_id: int) -> list[dict]:
         return [o for o in self._orders if o["user"] == tg_id]
 
-    async def fetch_addresses(
-        self, tg_id: int
-    ) -> list[dict]:
+    async def fetch_addresses(self, tg_id: int) -> list[dict]:
         return [a for a in self._addresses if a["user"] == tg_id]
 
     async def create_address(
@@ -377,9 +336,7 @@ class MockApiClient(ApiClient):
         self._addresses.append(addr)
         return addr
 
-    async def delete_address(
-        self, address_id: int
-    ) -> bool:
+    async def delete_address(self, address_id: int) -> bool:
         for a in self._addresses:
             if a["id"] == address_id:
                 self._addresses.remove(a)

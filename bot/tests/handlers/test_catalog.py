@@ -62,8 +62,14 @@ def test_render_product_card_populated():
 
 def test_render_product_card_shows_quantity_when_in_cart():
     """When the product is already in the cart, show the quantity in the button."""
-    mock_product = {"id": 3, "name": "Widget", "category_name": "Gear",
-                    "price": "10.00", "stock": 5, "description": "A widget."}
+    mock_product = {
+        "id": 3,
+        "name": "Widget",
+        "category_name": "Gear",
+        "price": "10.00",
+        "stock": 5,
+        "description": "A widget.",
+    }
     cart = {
         "items": [
             {"product": 1, "quantity": 2, "subtotal": "20.00"},
@@ -83,8 +89,14 @@ def test_render_product_card_shows_quantity_when_in_cart():
 
 def test_render_product_card_shows_default_when_not_in_cart():
     """When the product is not in the cart, fall back to default Add to Cart."""
-    mock_product = {"id": 9, "name": "Sticker", "category_name": "Gear",
-                    "price": "2.50", "stock": 100, "description": "A sticker."}
+    mock_product = {
+        "id": 9,
+        "name": "Sticker",
+        "category_name": "Gear",
+        "price": "2.50",
+        "stock": 100,
+        "description": "A sticker.",
+    }
     cart = {
         "items": [
             {"product": 1, "quantity": 2, "subtotal": "20.00"},
@@ -112,9 +124,7 @@ def test_parse_product_id():
 
 
 @pytest.mark.asyncio
-async def test_catalog_command_sends_new_message(
-    mock_update, context_with_app
-):
+async def test_catalog_command_sends_new_message(mock_update, context_with_app):
     """catalog_command fetches products via DI and sends a new message."""
     mock_update.callback_query = None
     mock_update.effective_chat.send_message = AsyncMock()

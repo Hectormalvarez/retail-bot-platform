@@ -157,9 +157,7 @@ async def start_checkout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return SELECTING_ADDRESS
     else:
         # No saved addresses — go straight to text input
-        await query.edit_message_text(
-            "📍 Please enter your full shipping address:"
-        )
+        await query.edit_message_text("📍 Please enter your full shipping address:")
         return WAITING_FOR_ADDRESS
 
 
@@ -196,9 +194,7 @@ async def pick_saved_address(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def prompt_new_address(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text(
-        "📍 Please enter your full shipping address:"
-    )
+    await query.edit_message_text("📍 Please enter your full shipping address:")
     return WAITING_FOR_ADDRESS
 
 
@@ -211,11 +207,7 @@ async def capture_address(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     # Ask if they want to save this address
     keyboard = [
-        [
-            InlineKeyboardButton(
-                "💾 Save for future use", callback_data="save_addr_yes"
-            )
-        ],
+        [InlineKeyboardButton("💾 Save for future use", callback_data="save_addr_yes")],
         [InlineKeyboardButton("❌ Don't save", callback_data="save_addr_no")],
     ]
     sent_msg = await update.effective_chat.send_message(
@@ -360,26 +352,18 @@ async def cancel_command_fallback(
 
 def register_handlers(app) -> None:
     checkout_conv = ConversationHandler(
-        entry_points=[
-            CallbackQueryHandler(start_checkout, pattern=r"^checkout$")
-        ],
+        entry_points=[CallbackQueryHandler(start_checkout, pattern=r"^checkout$")],
         states={
             SELECTING_ADDRESS: [
                 CallbackQueryHandler(
                     pick_saved_address,
                     pattern=r"^pick_addr_\d+$",
                 ),
-                CallbackQueryHandler(
-                    prompt_new_address, pattern=r"^new_address$"
-                ),
-                CallbackQueryHandler(
-                    cancel_checkout, pattern=r"^cancel_checkout$"
-                ),
+                CallbackQueryHandler(prompt_new_address, pattern=r"^new_address$"),
+                CallbackQueryHandler(cancel_checkout, pattern=r"^cancel_checkout$"),
             ],
             WAITING_FOR_ADDRESS: [
-                MessageHandler(
-                    filters.TEXT & ~filters.COMMAND, capture_address
-                )
+                MessageHandler(filters.TEXT & ~filters.COMMAND, capture_address)
             ],
             ASK_SAVE_ADDRESS: [
                 CallbackQueryHandler(
@@ -396,9 +380,7 @@ def register_handlers(app) -> None:
                     finalize_order,
                     pattern=r"^confirm_checkout$",
                 ),
-                CallbackQueryHandler(
-                    cancel_checkout, pattern=r"^cancel_checkout$"
-                ),
+                CallbackQueryHandler(cancel_checkout, pattern=r"^cancel_checkout$"),
             ],
         },
         fallbacks=[CommandHandler("cancel", cancel_command_fallback)],

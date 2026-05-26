@@ -25,8 +25,6 @@ class BotConfig:
         return cls(
             token=token,
             api_base_url=os.getenv("API_URL", "http://api:8000/api/"),
-            persistence_path=os.getenv(
-                "BOT_PERSISTENCE_PATH", "data/bot_state.pickle"
-            ),
+            persistence_path=os.getenv("BOT_PERSISTENCE_PATH", "data/bot_state.pickle"),
             log_level=os.getenv("BOT_LOG_LEVEL", "INFO"),
         )

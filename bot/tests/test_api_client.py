@@ -180,6 +180,8 @@ class TestMockApiClient:
 
         # No cross-contamination
         assert orders_a[0]["id"] != orders_b[0]["id"]
+
+
 # ---------------------------------------------------------------------------
 # HttpApiClient – uses mocked httpx so no real network
 # ---------------------------------------------------------------------------
@@ -366,9 +368,7 @@ class TestHttpApiClient:
                 "cart_total": "10.00",
             },
         )
-        mock_instance.post.return_value = self._mock_response(
-            mocker, {"id": 11}
-        )
+        mock_instance.post.return_value = self._mock_response(mocker, {"id": 11})
         ok = await http_client.add_product_to_cart(123, 5)
         assert ok is True
         # Now always POSTs — server-side handles dedup/increment
@@ -390,9 +390,7 @@ class TestHttpApiClient:
         mock_instance.post.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_add_product_to_cart_no_cart_returns_false(
-        self, http_client, mocker
-    ):
+    async def test_add_product_to_cart_no_cart_returns_false(self, http_client, mocker):
         mock_client = mocker.patch("api_client.httpx.AsyncClient")
         mock_instance = mock_client.return_value.__aenter__.return_value
         mock_instance.get.side_effect = httpx.HTTPError("no cart")
@@ -419,9 +417,7 @@ class TestHttpApiClient:
         assert ok is False
 
     @pytest.mark.asyncio
-    async def test_update_item_quantity_positive_calls_patch(
-        self, http_client, mocker
-    ):
+    async def test_update_item_quantity_positive_calls_patch(self, http_client, mocker):
         mock_client = mocker.patch("api_client.httpx.AsyncClient")
         mock_instance = mock_client.return_value.__aenter__.return_value
         mock_instance.patch.return_value = self._mock_response(mocker, {"quantity": 3})

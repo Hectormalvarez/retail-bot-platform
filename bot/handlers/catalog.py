@@ -50,9 +50,7 @@ def render_catalog_menu(products: list) -> tuple[str, list]:
     return "📦 *Available Products*:\nSelect an item to view details:", keyboard
 
 
-def render_product_card(
-    product: dict, cart: dict | None = None
-) -> tuple[str, list]:
+def render_product_card(product: dict, cart: dict | None = None) -> tuple[str, list]:
     """Generates the text body and inline keyboard for a product card.
 
     When *cart* is provided, the function checks whether the product is
@@ -174,6 +172,4 @@ def register_handlers(app) -> None:
     app.add_handler(
         CallbackQueryHandler(view_product_detail, pattern=r"^view_prod_\d+$")
     )
-    app.add_handler(
-        CallbackQueryHandler(back_to_catalog, pattern=r"^back_catalog$")
-    )
+    app.add_handler(CallbackQueryHandler(back_to_catalog, pattern=r"^back_catalog$"))

@@ -44,10 +44,7 @@ def render_orders_history(
     if not orders:
         return "📜 *You have no past orders yet.*", []
 
-    text_body = (
-        "📜 *Your Past Orders:*\n"
-        "Select an order to view its receipt breakdown:"
-    )
+    text_body = "📜 *Your Past Orders:*\nSelect an order to view its receipt breakdown:"
 
     keyboard: list[list[InlineKeyboardButton]] = [
         [
@@ -143,6 +140,7 @@ def extract_user_context(update: Update) -> dict:
         "last_name": user.last_name,
     }
 
+
 async def clear_chat_footprint(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Evicts incoming text triggers and deletes the stale menu canvas."""
     if update.message:
@@ -201,7 +199,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 6. Build dashboard content (pure function)
     text_body, keyboard = render_welcome_dashboard(
-        user_name, cart, latest_order,
+        user_name,
+        cart,
+        latest_order,
     )
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -243,7 +243,9 @@ async def back_to_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     latest_order = orders[0] if orders else None
 
     text_body, keyboard = render_welcome_dashboard(
-        user_name, cart, latest_order,
+        user_name,
+        cart,
+        latest_order,
     )
     await query.edit_message_text(
         text=text_body,
@@ -256,12 +258,6 @@ async def back_to_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def register_handlers(app) -> None:
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(
-        CommandHandler("catalog", start)
-    )  # legacy alias – main menu
-    app.add_handler(
-        CommandHandler("cancel", start)
-    )  # fallback command
-    app.add_handler(
-        CallbackQueryHandler(back_to_start, pattern=r"^back_start$")
-    )
+    app.add_handler(CommandHandler("catalog", start))  # legacy alias – main menu
+    app.add_handler(CommandHandler("cancel", start))  # fallback command
+    app.add_handler(CallbackQueryHandler(back_to_start, pattern=r"^back_start$"))

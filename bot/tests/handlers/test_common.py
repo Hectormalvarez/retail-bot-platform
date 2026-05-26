@@ -25,9 +25,7 @@ async def test_clear_chat_footprint_deletes_stale_menu():
 
     await clear_chat_footprint(update, context)
 
-    context.bot.delete_message.assert_called_once_with(
-        chat_id=12345, message_id=999
-    )
+    context.bot.delete_message.assert_called_once_with(chat_id=12345, message_id=999)
     assert context.user_data["active_menu_id"] is None
 
 

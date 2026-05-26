@@ -140,9 +140,7 @@ async def adjust_quantity_handler(update: Update, context: ContextTypes.DEFAULT_
 
 def register_handlers(app) -> None:
     app.add_handler(CommandHandler("cart", cart_command))
-    app.add_handler(
-        CallbackQueryHandler(cart_command, pattern=r"^view_cart_nav$")
-    )
+    app.add_handler(CallbackQueryHandler(cart_command, pattern=r"^view_cart_nav$"))
     app.add_handler(
         CallbackQueryHandler(add_to_cart_handler, pattern=r"^add_to_cart_\d+$")
     )

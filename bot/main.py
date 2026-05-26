@@ -60,11 +60,7 @@ def build_app(config: BotConfig | None = None) -> Application:
 
     os.makedirs(config.data_dir, exist_ok=True)
 
-    app = (
-        ApplicationBuilder()
-        .token(config.token)
-        .build()
-    )
+    app = ApplicationBuilder().token(config.token).build()
 
     # Inject shared context so handlers never import a concrete class.
     ctx = BotContext(
