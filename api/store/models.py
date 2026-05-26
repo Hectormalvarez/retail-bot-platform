@@ -122,6 +122,24 @@ class Order(models.Model):
         return f"Order #{self.id} - {self.user} ({self.status})"
 
 
+class Address(models.Model):
+    """Saved shipping address linked to a Telegram user."""
+
+    user = models.ForeignKey(
+        TelegramUser, on_delete=models.CASCADE, related_name="addresses"
+    )
+    label = models.CharField(max_length=100, help_text="e.g. 'Home', 'Office'")
+    full_address = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name_plural = "Addresses"
+
+    def __str__(self):
+        return f"{self.label}: {self.full_address[:50]}..."
+
+
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
     product = models.ForeignKey(Product, on_delete=models.RESTRICT)
