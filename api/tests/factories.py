@@ -1,5 +1,5 @@
 import factory
-from store.models import Cart, Category, Product, TelegramUser
+from store.models import Cart, CartItem, Category, Order, OrderItem, Product, TelegramUser
 
 
 class TelegramUserFactory(factory.django.DjangoModelFactory):
@@ -37,3 +37,30 @@ class CartFactory(factory.django.DjangoModelFactory):
         model = Cart
 
     user = factory.SubFactory(TelegramUserFactory)
+
+
+class CartItemFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = CartItem
+
+    cart = factory.SubFactory(CartFactory)
+    product = factory.SubFactory(ProductFactory)
+    quantity = 1
+
+
+class OrderFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Order
+
+    user = factory.SubFactory(TelegramUserFactory)
+    total_amount = "0.00"
+
+
+class OrderItemFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = OrderItem
+
+    order = factory.SubFactory(OrderFactory)
+    product = factory.SubFactory(ProductFactory)
+    quantity = 1
+    price_at_purchase = "15.00"
