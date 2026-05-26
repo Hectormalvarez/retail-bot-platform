@@ -48,6 +48,21 @@ class ApiClient(ABC):
         self, tg_id: int, shipping_address: str
     ) -> dict[str, Any] | None: ...
 
+    @abstractmethod
+    async def fetch_addresses(
+        self, tg_id: int
+    ) -> list[dict[str, Any]]: ...
+
+    @abstractmethod
+    async def create_address(
+        self, tg_id: int, label: str, full_address: str
+    ) -> dict[str, Any] | None: ...
+
+    @abstractmethod
+    async def delete_address(
+        self, address_id: int
+    ) -> bool: ...
+
 
 # ---------------------------------------------------------------------------
 # Concrete HTTP implementation
@@ -181,6 +196,26 @@ class HttpApiClient(ApiClient):
         )
         return result if isinstance(result, dict) else None
 
+    async def fetch_addresses(
+        self, tg_id: int
+    ) -> list[dict[str, Any]]:
+        data = await self._get(f"addresses/?user={tg_id}")
+        return data if isinstance(data, list) else []
+
+    async def create_address(
+        self, tg_id: int, label: str, full_address: str
+    ) -> dict[str, Any] | None:
+        result = await self._post(
+            "addresses/",
+            json={"user": tg_id, "label": label, "full_address": full_address},
+        )
+        return result if isinstance(result, dict) else None
+
+    async def delete_address(
+        self, address_id: int
+    ) -> bool:
+        return await self._delete(f"addresses/{address_id}/")
+
 
 # ---------------------------------------------------------------------------
 # In-memory mock for unit tests
@@ -196,6 +231,8 @@ class MockApiClient(ApiClient):
     users: set[int] = None  # type: ignore[assignment]
     next_cart_item_id: int = 1
     next_order_id: int = 1
+    _addresses: list[dict] = None  # type: ignore[assignment]
+    _next_address_id: int = 1
 
     def __post_init__(self) -> None:
         if self.products is None:
@@ -206,6 +243,8 @@ class MockApiClient(ApiClient):
             self.carts = {}
         if self.users is None:
             self.users = set()
+        if self._addresses is None:
+            self._addresses = []
 
     async def fetch_products(self) -> list[dict]:
         return self.products
@@ -297,3 +336,30 @@ class MockApiClient(ApiClient):
         cart["items"].clear()
         cart["cart_total"] = "0.00"
         return order
+
+    async def fetch_addresses(
+        self, tg_id: int
+    ) -> list[dict]:
+        return [a for a in self._addresses if a["user"] == tg_id]
+
+    async def create_address(
+        self, tg_id: int, label: str, full_address: str
+    ) -> dict | None:
+        addr = {
+            "id": self._next_address_id,
+            "user": tg_id,
+            "label": label,
+            "full_address": full_address,
+        }
+        self._next_address_id += 1
+        self._addresses.append(addr)
+        return addr
+
+    async def delete_address(
+        self, address_id: int
+    ) -> bool:
+        for a in self._addresses:
+            if a["id"] == address_id:
+                self._addresses.remove(a)
+                return True
+        return False
