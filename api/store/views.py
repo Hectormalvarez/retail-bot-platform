@@ -1,6 +1,7 @@
 from django.db import transaction
 from rest_framework import status, viewsets
 from rest_framework.response import Response
+from .cart_service import CartService
 from .models import Cart, CartItem, Category, Order, OrderItem, Product, TelegramUser
 from .serializers import (
     CartItemSerializer,
@@ -39,6 +40,77 @@ class CartViewSet(viewsets.ModelViewSet):
 class CartItemViewSet(viewsets.ModelViewSet):
     queryset = CartItem.objects.all()
     serializer_class = CartItemSerializer
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._cart_service = CartService()
+
+    def create(self, request, *args, **kwargs):
+        cart_id = request.data.get("cart")
+        product_id = request.data.get("product")
+        if not cart_id or not product_id:
+            return Response(
+                {"error": "cart and product fields are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        quantity = request.data.get("quantity", 1)
+        try:
+            quantity = int(quantity)
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "quantity must be an integer"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if quantity <= 0:
+            return Response(
+                {"error": "quantity must be a positive integer"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            cart = Cart.objects.get(id=cart_id)
+        except Cart.DoesNotExist:
+            return Response(
+                {"error": "Cart not found"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        tg_id = cart.user.telegram_id
+        cart_item = self._cart_service.add_or_increment(tg_id, product_id, quantity=quantity)
+        if cart_item is None:
+            return Response(
+                {"error": "Failed to add item — user or product not found"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = self.get_serializer(cart_item)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def partial_update(self, request, *args, **kwargs):
+        item_id = kwargs.get("pk")
+        new_qty = request.data.get("quantity")
+        if new_qty is None:
+            return Response(
+                {"error": "quantity field is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            new_qty = int(new_qty)
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "quantity must be an integer"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        cart_item = self._cart_service.update_quantity(item_id, new_qty)
+        if cart_item is None:
+            # Item was deleted (qty <= 0) or didn't exist — 204 is clean in both cases
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        serializer = self.get_serializer(cart_item)
+        return Response(serializer.data)
 
 
 class OrderViewSet(viewsets.ModelViewSet):

@@ -22,11 +22,14 @@ class CartService:
         self.carts = cart_repo or DjangoCartRepo()
         self.products = product_repo or DjangoProductRepo()
 
-    def add_or_increment(self, tg_id: int, product_id: int) -> CartItem | None:
+    def add_or_increment(self, tg_id: int, product_id: int, quantity: int = 1) -> CartItem | None:
         """Add a product to the user's cart, or increment if it already exists.
 
         Returns the CartItem, or None if the user/product does not exist.
         """
+        if quantity <= 0:
+            return None
+
         try:
             user = self.users.get_by_telegram(tg_id)
         except Exception:
@@ -36,7 +39,9 @@ class CartService:
 
         existing = self.carts.find_item(cart, product_id)
         if existing is not None:
-            self.carts.increment_item(existing)
+            # Increment by the requested quantity
+            for _ in range(quantity):
+                self.carts.increment_item(existing)
             return existing
 
         try:
@@ -44,7 +49,7 @@ class CartService:
         except Exception:
             return None
 
-        return self.carts.add_item(cart, product)
+        return self.carts.add_item(cart, product, quantity=quantity)
 
     def update_quantity(self, item_id: int, new_qty: int) -> CartItem | None:
         """Update cart-item quantity. Returns None if the item was deleted (qty <= 0)."""
