@@ -2,8 +2,9 @@ from django.db import transaction
 from rest_framework import status, viewsets
 from rest_framework.response import Response
 from .cart_service import CartService
-from .models import Cart, CartItem, Category, Order, OrderItem, Product, TelegramUser
+from .models import Address, Cart, CartItem, Category, Order, OrderItem, Product, TelegramUser
 from .serializers import (
+    AddressSerializer,
     CartItemSerializer,
     CartSerializer,
     CategorySerializer,
@@ -111,6 +112,18 @@ class CartItemViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(cart_item)
         return Response(serializer.data)
+
+
+class AddressViewSet(viewsets.ModelViewSet):
+    queryset = Address.objects.all()
+    serializer_class = AddressSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user_tg_id = self.request.query_params.get("user")
+        if user_tg_id is not None:
+            qs = qs.filter(user__telegram_id=user_tg_id)
+        return qs
 
 
 class OrderViewSet(viewsets.ModelViewSet):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from .models import Cart, CartItem, Order, OrderItem, Product, TelegramUser
+from .models import Address, Cart, CartItem, Order, OrderItem, Product, TelegramUser
 
 
 class DjangoCartRepo:
@@ -56,6 +56,22 @@ class DjangoProductRepo:
     def decrement_stock(self, product: Product, quantity: int) -> None:
         product.stock -= quantity
         product.save(update_fields=["stock"])
+
+
+class DjangoAddressRepo:
+    """Wraps Address ORM queries."""
+
+    def get_by_user(self, user: TelegramUser) -> list[Address]:
+        return list(Address.objects.filter(user=user))
+
+    def get_by_id(self, address_id: int) -> Address:
+        return Address.objects.get(id=address_id)
+
+    def create(self, user: TelegramUser, label: str, full_address: str) -> Address:
+        return Address.objects.create(user=user, label=label, full_address=full_address)
+
+    def delete(self, address: Address) -> None:
+        address.delete()
 
 
 class DjangoUserRepo:

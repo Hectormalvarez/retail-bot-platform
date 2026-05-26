@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Cart, CartItem, Category, Order, OrderItem, Product, TelegramUser
+from .models import Address, Cart, CartItem, Category, Order, OrderItem, Product, TelegramUser
 
 
 class TelegramUserSerializer(serializers.ModelSerializer):
@@ -69,6 +69,12 @@ class CartSerializer(serializers.ModelSerializer):
 
     def get_cart_total(self, obj):
         return sum(item.product.price * item.quantity for item in obj.items.all())
+
+
+class AddressSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Address
+        fields = ["id", "user", "label", "full_address", "created_at"]
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
