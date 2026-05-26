@@ -1,8 +1,10 @@
 import logging
 import os
+import traceback
 
 from dotenv import load_dotenv
-from telegram.ext import Application, ApplicationBuilder
+from telegram import Update
+from telegram.ext import Application, ApplicationBuilder, ContextTypes
 
 from config import BotConfig
 from context import BotContext
@@ -16,6 +18,30 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
+
+
+async def global_error_handler(
+    update: Update | None, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """Centralised fallback for unhandled runtime exceptions.
+
+    Logs the full traceback securely and, when possible, sends a friendly
+    message to the active chat so the user knows a minor refresh is needed.
+    """
+    logger.error(
+        "Unhandled exception: %s\n%s",
+        context.error,
+        "".join(traceback.format_exception(None, context.error, context.error.__traceback__)),
+    )
+
+    if update is not None and update.effective_chat is not None:
+        try:
+            await update.effective_chat.send_message(
+                "⚠️ A minor interface hiccup occurred. "
+                "Please use /start to refresh the dashboard."
+            )
+        except Exception:
+            logger.debug("Failed to send error notification to chat.")
 
 
 def build_app(config: BotConfig | None = None) -> Application:
@@ -46,6 +72,9 @@ def build_app(config: BotConfig | None = None) -> Application:
 
     # Auto-discover and register all handler modules.
     register_all(app)
+
+    # Mount the global error handler last so it wraps everything.
+    app.add_error_handler(global_error_handler)
 
     return app
 

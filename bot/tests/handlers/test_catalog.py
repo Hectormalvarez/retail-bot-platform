@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from telegram.error import BadRequest
 
 from handlers.catalog import (
     back_to_catalog,
@@ -176,4 +177,27 @@ async def test_back_to_catalog_edits_message():
 
     await back_to_catalog(mock_update, ctx)
 
+    mock_update.callback_query.edit_message_text.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_back_to_catalog_swallows_message_not_modified_exception():
+    """BadRequest("Message is not modified") is caught silently."""
+    mock_update = MagicMock()
+    mock_update.callback_query.answer = AsyncMock()
+    mock_update.callback_query.edit_message_text = AsyncMock(
+        side_effect=BadRequest(message="Message is not modified"),
+    )
+
+    api = MockApiClient()
+    ctx_app = MagicMock()
+    ctx_app.bot_data = {"ctx": MagicMock(api=api)}
+
+    ctx = MagicMock()
+    ctx.application = ctx_app
+
+    # Should complete without raising
+    await back_to_catalog(mock_update, ctx)
+
+    mock_update.callback_query.answer.assert_called_once()
     mock_update.callback_query.edit_message_text.assert_called_once()

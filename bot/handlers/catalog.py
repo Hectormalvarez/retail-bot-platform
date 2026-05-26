@@ -6,6 +6,7 @@ import asyncio
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.error import BadRequest
 from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes
 
 from context import BotContext
@@ -104,7 +105,11 @@ async def catalog_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def back_to_catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handles navigation callback requests to return users to the catalog."""
+    """Handles navigation callback requests to return users to the catalog.
+
+    Swallows ``BadRequest("Message is not modified")`` — the UI is already
+    in the correct state so no action is needed.
+    """
     query = update.callback_query
     await query.answer()
 
@@ -113,9 +118,15 @@ async def back_to_catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text, keyboard = render_catalog_menu(products)
     markup = InlineKeyboardMarkup(keyboard) if keyboard else None
 
-    await query.edit_message_text(
-        text=text, parse_mode="Markdown", reply_markup=markup
-    )
+    try:
+        await query.edit_message_text(
+            text=text, parse_mode="Markdown", reply_markup=markup
+        )
+    except BadRequest as exc:
+        if "Message is not modified" in exc.message:
+            pass  # Idempotent — the canvas is already correct.
+        else:
+            raise
 
 
 async def view_product_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -136,9 +147,15 @@ async def view_product_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
     text, keyboard = render_product_card(product, cart)
     markup = InlineKeyboardMarkup(keyboard) if keyboard else None
 
-    await query.edit_message_text(
-        text=text, parse_mode="Markdown", reply_markup=markup
-    )
+    try:
+        await query.edit_message_text(
+            text=text, parse_mode="Markdown", reply_markup=markup
+        )
+    except BadRequest as exc:
+        if "Message is not modified" in exc.message:
+            pass  # Idempotent — the canvas is already correct.
+        else:
+            raise
 
 
 # ---- registration --------------------------------------------------------
