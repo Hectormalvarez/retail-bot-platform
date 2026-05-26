@@ -1,5 +1,6 @@
 import pytest
 from store.models import CartItem
+from store.services import OrderService
 
 
 @pytest.mark.django_db
@@ -49,3 +50,59 @@ def test_checkout_empty_cart_fails(api_client, test_user, test_cart):
 
     assert res.status_code == 400
     assert "empty" in res.data["error"]
+
+
+@pytest.mark.django_db
+def test_checkout_nonexistent_user_returns_400(api_client):
+    """POST /api/orders/ with a user that does not exist returns 400."""
+    payload = {"user": 9999999, "shipping_address": "No Man's Land"}
+    res = api_client.post("/api/orders/", payload, format="json")
+    assert res.status_code == 400
+    assert "Invalid user" in res.data["error"]
+
+
+@pytest.mark.django_db
+def test_checkout_missing_fields_returns_400(api_client):
+    """POST /api/orders/ without required fields returns 400."""
+    payload = {"user": 999}
+    res = api_client.post("/api/orders/", payload, format="json")
+    assert res.status_code == 400
+
+
+@pytest.mark.django_db
+def test_order_service_create_order_directly(test_user, test_cart, test_product):
+    """Unit test OrderService.create_order — cart items become OrderItems."""
+    CartItem.objects.create(cart=test_cart, product=test_product, quantity=3)
+
+    order, error = OrderService.create_order(
+        user_id=test_user.telegram_id,
+        shipping_address="42 Test Ave",
+    )
+
+    assert error is None
+    assert order is not None
+    assert order.user == test_user
+    assert order.status == "PENDING"
+    assert float(order.total_amount) == float(test_product.price) * 3
+
+    # Verify OrderItems were created
+    assert order.items.count() == 1
+    order_item = order.items.first()
+    assert order_item.product == test_product
+    assert order_item.quantity == 3
+    assert float(order_item.price_at_purchase) == float(test_product.price)
+
+    # Verify cart was emptied
+    assert test_cart.items.count() == 0
+
+
+@pytest.mark.django_db
+def test_order_service_create_order_invalid_user_returns_error(db):
+    """OrderService.create_order with a non-existent user returns an error."""
+    order, error = OrderService.create_order(
+        user_id=9999999,
+        shipping_address="Nowhere",
+    )
+    assert order is None
+    assert error is not None
+    assert "Invalid user" in error
