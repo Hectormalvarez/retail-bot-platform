@@ -42,14 +42,27 @@ def render_orders_history(
         The formatted menu text and the inline keyboard grid.
     """
     if not orders:
-        return "📜 *You have no past orders yet.*", []
+        text_body = "📜 *You don't have any past orders yet.*"
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "⬅️ Back to Main Menu", callback_data="back_start"
+                )
+            ],
+        ]
+        return text_body, keyboard
 
-    text_body = "📜 *Your Past Orders:*\nSelect an order to view its receipt breakdown:"
+    text_body = (
+        "📜 *Your Purchase History*\n"
+        "Select an order below to view its full receipt and "
+        "cash-payment verification status:"
+    )
 
     keyboard: list[list[InlineKeyboardButton]] = [
         [
             InlineKeyboardButton(
-                f"📦 Order #{o['id']} — ${o['total_amount']}",
+                f"📦 Order #{o['id']} — ${o['total_amount']} "
+                f"({o['status'].title()})",
                 callback_data=f"view_old_order_{o['id']}",
             )
         ]

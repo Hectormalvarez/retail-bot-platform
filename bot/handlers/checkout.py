@@ -52,8 +52,35 @@ def render_order_confirmation(cart: dict, address: str) -> tuple[str, list]:
     return text_body, keyboard
 
 
-def render_order_receipt(order_data: dict, address: str) -> tuple[str, list]:
-    """Generates the completed order receipt text after checkout succeeds."""
+def render_order_receipt(
+    order_data: dict,
+    address: str,
+    back_callback: str = "back_start",
+    back_label: str = "🏠 Return to Main Menu",
+) -> tuple[str, list]:
+    """Generates the completed order receipt text after checkout succeeds.
+
+    Appends manual payment instructions so the user knows how to pay for
+    manually-fulfilled orders.
+
+    Parameters
+    ----------
+    order_data : dict
+        The order response from the API.
+    address : str
+        The shipping address used for the order.
+    back_callback : str
+        Callback data for the bottom navigation button.
+        Defaults to ``back_start`` (main menu).
+    back_label : str
+        Label for the bottom navigation button.
+        Defaults to ``"🏠 Return to Main Menu"``.
+
+    Returns
+    -------
+    tuple[str, list]
+        The formatted receipt text and inline keyboard grid.
+    """
     receipt_lines = [
         f"✅ *Order #{order_data['id']} Confirmed*\n",
         f"*Shipping Address*:\n`{address}`\n",
@@ -67,8 +94,30 @@ def render_order_receipt(order_data: dict, address: str) -> tuple[str, list]:
         )
 
     receipt_lines.append(f"\n*Total Paid*: ${order_data['total_amount']}")
+
+    # Manual payment instructions block
+    receipt_lines.extend(
+        [
+            "",
+            "💳 **Manual Payment Instructions**:",
+            "Your order is currently **[Pending Payment]**. To complete your "
+            "purchase, please send the total amount to the store administrator.",
+            "",
+            "• **Venmo**: `@YourStoreHandle`",
+            "• **Zelle**: `payments@yourstore.local`",
+            "• **Reference Note**: Include `Order #XXXX` in your payment memo.",
+            "",
+            "*Once payment is verified, your order tracking status below will "
+            "update automatically.*",
+        ]
+    )
+
     text_body = "\n".join(receipt_lines)
-    return text_body, []
+
+    keyboard = [
+        [InlineKeyboardButton(back_label, callback_data=back_callback)],
+    ]
+    return text_body, keyboard
 
 
 def build_address_keyboard(
@@ -115,6 +164,50 @@ async def view_history_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         text=text_body,
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard) if keyboard else None,
+    )
+
+
+async def view_historical_order_detail_handler(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+):
+    """Handles a click on a past order row in the history list.
+
+    Extracts the historical order ID from the callback data, fetches the
+    user's full order list, finds the matching order, and renders the
+    receipt with a ``[⬅️ Back to History]`` navigation button.
+    """
+    query = update.callback_query
+    await query.answer()
+
+    # Extract order ID from callback like "view_old_order_42"
+    historical_order_id = int(query.data.split("_")[-1])
+
+    tg_id = query.from_user.id
+    ctx: BotContext = context.application.bot_data["ctx"]
+    orders = await ctx.api.fetch_user_orders(tg_id)
+
+    # Find the matching order
+    order = next(
+        (o for o in orders if o["id"] == historical_order_id),
+        None,
+    )
+    if order is None:
+        await query.edit_message_text(
+            "❌ Order not found. It may have been removed.",
+        )
+        return
+
+    address = order.get("shipping_address", "Unknown")
+    text_body, keyboard = render_order_receipt(
+        order,
+        address,
+        back_callback="view_history_nav",
+        back_label="⬅️ Back to History",
+    )
+    await query.edit_message_text(
+        text=text_body,
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
 
@@ -310,8 +403,12 @@ async def finalize_order(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         context.user_data.pop("saved_addresses", None)
         return ConversationHandler.END
 
-    text_body, _ = render_order_receipt(order_data, address_text)
-    await update.effective_chat.send_message(text=text_body, parse_mode="Markdown")
+    text_body, keyboard = render_order_receipt(order_data, address_text)
+    await update.effective_chat.send_message(
+        text=text_body,
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
 
     context.user_data.pop("checkout_address", None)
     context.user_data.pop("address_was_saved", None)
@@ -385,6 +482,9 @@ def register_handlers(app) -> None:
         },
         fallbacks=[CommandHandler("cancel", cancel_command_fallback)],
         allow_reentry=True,
+    )
+    app.add_handler(
+        CallbackQueryHandler(view_historical_order_detail_handler, pattern=r"^view_old_order_\d+$")
     )
     app.add_handler(
         CallbackQueryHandler(view_history_handler, pattern=r"^view_history_nav$")

@@ -302,6 +302,8 @@ class MockApiClient(ApiClient):
             "id": self.next_order_id,
             "user": tg_id,
             "total_amount": cart["cart_total"],
+            "status": "PENDING",
+            "shipping_address": shipping_address,
             "items": [
                 {
                     "product_name": i["product_name"],

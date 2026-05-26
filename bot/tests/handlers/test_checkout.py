@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from telegram import InlineKeyboardButton
 from telegram.ext import ConversationHandler
 
 from api_client import MockApiClient
@@ -22,8 +23,10 @@ from handlers.checkout import (
     save_address_and_confirm,
     skip_save_confirm,
     start_checkout,
+    view_historical_order_detail_handler,
     view_history_handler,
 )
+from handlers.common import render_orders_history
 
 # ---- pure helpers (no DI needed) ----------------------------------------
 
@@ -60,7 +63,32 @@ def test_render_order_receipt():
     assert "456 Side St" in text
     assert "T-Shirt" in text
     assert "25.00" in text
-    assert keyboard == []
+    # Payment instructions present
+    assert "Manual Payment Instructions" in text
+    assert "Venmo" in text
+    assert "Zelle" in text
+    # Keyboard has one back button
+    assert len(keyboard) == 1
+    assert keyboard[0][0].callback_data == "back_start"
+    assert keyboard[0][0].text == "🏠 Return to Main Menu"
+
+
+def test_render_order_receipt_custom_back():
+    """render_order_receipt accepts custom back callback and label."""
+    order_data = {
+        "id": 42,
+        "items": [],
+        "total_amount": "0.00",
+    }
+    text, keyboard = render_order_receipt(
+        order_data,
+        "N/A",
+        back_callback="view_history_nav",
+        back_label="⬅️ Back to History",
+    )
+    assert len(keyboard) == 1
+    assert keyboard[0][0].callback_data == "view_history_nav"
+    assert keyboard[0][0].text == "⬅️ Back to History"
 
 
 def test_build_address_keyboard():
@@ -115,9 +143,13 @@ async def test_view_history_handler_with_no_orders():
     update.callback_query.edit_message_text.assert_called_once()
 
     call_args = update.callback_query.edit_message_text.call_args[1]
-    assert "You have no past orders yet" in call_args["text"]
+    assert "don't have any past orders yet" in call_args["text"]
     assert call_args["parse_mode"] == "Markdown"
-    assert call_args["reply_markup"] is None
+    # Empty-state now has a back button keyboard
+    reply_markup = call_args["reply_markup"]
+    assert reply_markup is not None
+    assert len(reply_markup.inline_keyboard) == 1
+    assert "Back to Main Menu" in reply_markup.inline_keyboard[0][0].text
 
 
 @pytest.mark.asyncio
@@ -144,15 +176,18 @@ async def test_view_history_handler_with_orders():
     update.callback_query.edit_message_text.assert_called_once()
 
     call_args = update.callback_query.edit_message_text.call_args[1]
-    assert "Your Past Orders" in call_args["text"]
+    assert "Your Purchase History" in call_args["text"]
 
     reply_markup = call_args["reply_markup"]
     assert reply_markup is not None
 
     # The inline keyboard should have 3 rows: 2 orders + 1 back button
     assert len(reply_markup.inline_keyboard) == 3
+    # Order rows include status label
     assert "Order #1" in reply_markup.inline_keyboard[0][0].text
+    assert "(Pending)" in reply_markup.inline_keyboard[0][0].text
     assert "Order #2" in reply_markup.inline_keyboard[1][0].text
+    assert "(Pending)" in reply_markup.inline_keyboard[1][0].text
     assert "Back to Main Menu" in reply_markup.inline_keyboard[2][0].text
 
 
@@ -444,3 +479,90 @@ async def test_cancel_command_fallback_sends_message():
     assert state == ConversationHandler.END
     update.effective_chat.send_message.assert_called_once()
     assert ctx.user_data["active_menu_id"] == 500
+
+
+# ---- render_orders_history pure function tests ---------------------------
+
+
+def test_render_orders_history_empty():
+    """render_orders_history returns no-orders text with a 1-button keyboard."""
+    text, keyboard = render_orders_history([])
+    assert "don't have any past orders yet" in text
+    assert len(keyboard) == 1
+    assert keyboard[0][0].callback_data == "back_start"
+
+
+def test_render_orders_history_multiple_statuses():
+    """render_orders_history populates rows with correct status labels."""
+    orders = [
+        {"id": 1, "total_amount": "10.00", "status": "PENDING"},
+        {"id": 2, "total_amount": "25.00", "status": "COMPLETED"},
+        {"id": 3, "total_amount": "15.00", "status": "SHIPPED"},
+    ]
+    text, keyboard = render_orders_history(orders)
+    assert "Your Purchase History" in text
+    assert len(keyboard) == 4  # 3 orders + back button
+
+    # Order rows
+    assert "(Pending)" in keyboard[0][0].text
+    assert "(Completed)" in keyboard[1][0].text
+    assert "(Shipped)" in keyboard[2][0].text
+
+    # Back button
+    assert keyboard[3][0].callback_data == "back_start"
+
+
+# ---- view_historical_order_detail_handler tests --------------------------
+
+
+@pytest.mark.asyncio
+async def test_view_historical_order_detail_handler_shows_receipt():
+    """Clicking a past order row renders the receipt with back-to-history button."""
+    api = MockApiClient(
+        product_details={1: {"id": 1, "name": "Widget", "price": "9.99"}}
+    )
+    await api.add_product_to_cart(123, 1)
+    await api.submit_order(123, "123 Main St")
+
+    ctx = _make_context(api)
+
+    update = MagicMock()
+    update.callback_query = AsyncMock()
+    update.callback_query.from_user.id = 123
+    update.callback_query.data = "view_old_order_1"
+
+    await view_historical_order_detail_handler(update, ctx)
+
+    update.callback_query.answer.assert_called_once()
+    update.callback_query.edit_message_text.assert_called_once()
+
+    call_args = update.callback_query.edit_message_text.call_args[1]
+    assert "Order #1 Confirmed" in call_args["text"]
+    assert "123 Main St" in call_args["text"]
+    assert "Manual Payment Instructions" in call_args["text"]
+    assert call_args["parse_mode"] == "Markdown"
+
+    reply_markup = call_args["reply_markup"]
+    assert reply_markup is not None
+    assert len(reply_markup.inline_keyboard) == 1
+    assert reply_markup.inline_keyboard[0][0].callback_data == "view_history_nav"
+    assert "Back to History" in reply_markup.inline_keyboard[0][0].text
+
+
+@pytest.mark.asyncio
+async def test_view_historical_order_detail_handler_not_found():
+    """Shows order-not-found when the order ID doesn't match."""
+    api = MockApiClient()
+    ctx = _make_context(api)
+
+    update = MagicMock()
+    update.callback_query = AsyncMock()
+    update.callback_query.from_user.id = 123
+    update.callback_query.data = "view_old_order_999"
+
+    await view_historical_order_detail_handler(update, ctx)
+
+    update.callback_query.edit_message_text.assert_called_once()
+    # Text is passed as positional arg — check call_args[0]
+    call_args = update.callback_query.edit_message_text.call_args
+    assert "Order not found" in call_args[0][0]

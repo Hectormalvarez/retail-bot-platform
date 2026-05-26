@@ -64,38 +64,42 @@ async def test_clear_chat_footprint_handles_delete_exception():
 
 
 def test_render_orders_history_no_orders():
-    """An empty orders list returns the 'no past orders' message and no buttons."""
+    """An empty orders list returns the 'no orders' message with a back button."""
     text, keyboard = render_orders_history([])
 
-    assert "You have no past orders yet" in text
-    assert keyboard == []
+    assert "don't have any past orders yet" in text
+    assert len(keyboard) == 1
+    assert keyboard[0][0].callback_data == "back_start"
 
 
 def test_render_orders_history_with_two_orders():
     """A list of 2 orders produces 3 keyboard rows (2 orders + 1 back button)."""
     orders = [
-        {"id": 101, "total_amount": "49.99"},
-        {"id": 202, "total_amount": "125.00"},
+        {"id": 101, "total_amount": "49.99", "status": "PENDING"},
+        {"id": 202, "total_amount": "125.00", "status": "COMPLETED"},
     ]
 
     text, keyboard = render_orders_history(orders)
 
     # Text assertions
-    assert "Your Past Orders" in text
-    assert "Select an order to view its receipt breakdown" in text
+    assert "Your Purchase History" in text
 
     # Button count: 3 rows (2 order buttons + 1 back button)
     assert len(keyboard) == 3
 
-    # Order button assertions
-    assert keyboard[0][0].text == "📦 Order #101 — $49.99"
+    # Order button assertions: now includes status label
+    assert "Order #101" in keyboard[0][0].text
+    assert "49.99" in keyboard[0][0].text
+    assert "(Pending)" in keyboard[0][0].text
     assert keyboard[0][0].callback_data == "view_old_order_101"
 
-    assert keyboard[1][0].text == "📦 Order #202 — $125.00"
+    assert "Order #202" in keyboard[1][0].text
+    assert "125.00" in keyboard[1][0].text
+    assert "(Completed)" in keyboard[1][0].text
     assert keyboard[1][0].callback_data == "view_old_order_202"
 
     # Back button assertion
-    assert keyboard[2][0].text == "⬅️ Back to Main Menu"
+    assert "Back to Main Menu" in keyboard[2][0].text
     assert keyboard[2][0].callback_data == "back_start"
 
 
