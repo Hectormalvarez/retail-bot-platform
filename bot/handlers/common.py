@@ -14,6 +14,82 @@ logger = logging.getLogger(__name__)
 
 # ---- helpers (no DI needed – pure functions) ---------------------------
 
+_ORDER_STATUS_LABELS = {
+    "PENDING": "Pending Payment",
+    "COMPLETED": "Completed/Paid",
+    "SHIPPED": "Shipped",
+    "CANCELLED": "Cancelled",
+}
+
+
+def render_welcome_dashboard(
+    user_name: str,
+    cart: dict | None,
+    latest_order: dict | None,
+) -> tuple[str, list[list[InlineKeyboardButton]]]:
+    """Render the welcome dashboard text and inline keyboard layout.
+
+    This is a pure function with no I/O side effects. It produces a message
+    body string and a raw keyboard grid that the caller can wrap with
+    InlineKeyboardMarkup.
+
+    Parameters
+    ----------
+    user_name : str
+        The display name of the user.
+    cart : dict or None
+        The user's active cart dict, or None if no cart exists.
+        Expected shape: {"items": [...], "cart_total": "XX.XX"}.
+    latest_order : dict or None
+        The user's most recent order dict, or None if no orders exist.
+        Expected shape: {"id": int, "status": str}.
+
+    Returns
+    -------
+    tuple[str, list[list[InlineKeyboardButton]]]
+        The formatted welcome message and the inline keyboard grid.
+    """
+    text_parts = [f"Welcome back, {user_name}!"]
+
+    # ---- Cart section ---------------------------------------------------
+    if cart is None or not cart.get("items"):
+        text_parts.append("🛒 Your cart is empty")
+    else:
+        total_items = sum(item["quantity"] for item in cart["items"])
+        cart_total = cart["cart_total"]
+        text_parts.append(f"🛒 Active Cart: {total_items} items (${cart_total})")
+
+    # ---- Order tracking section -----------------------------------------
+    if latest_order is None:
+        text_parts.append("📦 No recent orders")
+    else:
+        order_id = latest_order["id"]
+        status_code = latest_order["status"]
+        status_label = _ORDER_STATUS_LABELS.get(status_code, status_code)
+        text_parts.append(f"📦 Order #{order_id}: [{status_label}]")
+
+    text_body = "\n".join(text_parts)
+
+    # ---- Keyboard layout ------------------------------------------------
+    keyboard: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton("📦 Browse Catalog", callback_data="back_catalog")],
+    ]
+
+    # Row 2: View Active Cart (only if cart has items)
+    if cart is not None and cart.get("items"):
+        keyboard.append(
+            [InlineKeyboardButton("🛍️ View Active Cart", callback_data="view_cart_nav")]
+        )
+
+    # Row 3: Order History (only if latest_order exists)
+    if latest_order is not None:
+        keyboard.append(
+            [InlineKeyboardButton("📜 Order History", callback_data="view_history_nav")]
+        )
+
+    return text_body, keyboard
+
+
 def extract_user_context(update: Update) -> dict:
     """Helper to cleanly extract Telegram user metadata."""
     user = update.effective_user
@@ -23,7 +99,6 @@ def extract_user_context(update: Update) -> dict:
         "first_name": user.first_name,
         "last_name": user.last_name,
     }
-
 
 async def clear_chat_footprint(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Evicts incoming text triggers and deletes the stale menu canvas."""

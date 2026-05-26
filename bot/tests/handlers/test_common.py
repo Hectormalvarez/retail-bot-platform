@@ -2,7 +2,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from handlers.common import back_to_start, clear_chat_footprint, start
+from handlers.common import (
+    back_to_start,
+    clear_chat_footprint,
+    render_welcome_dashboard,
+    start,
+)
 
 
 # ---- pure helpers (no DI needed) ----------------------------------------
@@ -55,6 +60,81 @@ async def test_clear_chat_footprint_handles_delete_exception():
 
     # Should not raise, and user_data should still be cleared
     assert context.user_data["active_menu_id"] is None
+
+
+# ---- render_welcome_dashboard (pure – no DI, no asyncio) ----------------
+
+
+def test_render_welcome_dashboard_pristine_user():
+    """Scenario 1: A pristine user with no cart and no orders."""
+    text, keyboard = render_welcome_dashboard(
+        user_name="Alice",
+        cart=None,
+        latest_order=None,
+    )
+
+    # Text assertions
+    assert "Your cart is empty" in text
+    assert "No recent orders" in text
+    assert "Welcome back, Alice!" in text
+
+    # Keyboard assertions
+    assert len(keyboard) == 1  # only Browse Catalog row
+    assert keyboard[0][0].text == "📦 Browse Catalog"
+    assert keyboard[0][0].callback_data == "back_catalog"
+
+
+def test_render_welcome_dashboard_with_active_cart():
+    """Scenario 2: A user with an active cart (no orders)."""
+    sample_cart = {
+        "items": [
+            {"product_name": "Widget A", "quantity": 2, "subtotal": "19.98"},
+            {"product_name": "Widget B", "quantity": 1, "subtotal": "9.99"},
+            {"product_name": "Widget C", "quantity": 3, "subtotal": "44.97"},
+        ],
+        "cart_total": "74.94",
+    }
+
+    text, keyboard = render_welcome_dashboard(
+        user_name="Bob",
+        cart=sample_cart,
+        latest_order=None,
+    )
+
+    # Text assertions: total_items should be 2 + 1 + 3 = 6
+    assert "Active Cart: 6 items ($74.94)" in text
+    assert "No recent orders" in text
+
+    # Keyboard assertions: Browse Catalog + View Active Cart
+    assert len(keyboard) == 2
+    assert keyboard[0][0].text == "📦 Browse Catalog"
+    assert keyboard[1][0].text == "🛍️ View Active Cart"
+    assert keyboard[1][0].callback_data == "view_cart_nav"
+
+
+def test_render_welcome_dashboard_with_shipped_order():
+    """Scenario 3: A user with a shipped order (no active cart)."""
+    sample_order = {
+        "id": 42,
+        "status": "SHIPPED",
+    }
+
+    text, keyboard = render_welcome_dashboard(
+        user_name="Charlie",
+        cart=None,
+        latest_order=sample_order,
+    )
+
+    # Text assertions
+    assert "Your cart is empty" in text
+    assert "Order #42" in text
+    assert "[Shipped]" in text
+
+    # Keyboard assertions: Browse Catalog + Order History
+    assert len(keyboard) == 2
+    assert keyboard[0][0].text == "📦 Browse Catalog"
+    assert keyboard[1][0].text == "📜 Order History"
+    assert keyboard[1][0].callback_data == "view_history_nav"
 
 
 # ---- start / back_to_start (need app.bot_data["ctx"]) -------------------
