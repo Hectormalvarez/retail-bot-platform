@@ -58,6 +58,48 @@ def test_render_product_card_populated():
     assert "15.00" in text
     assert len(keyboard) == 3
     assert keyboard[0][0].callback_data == "add_to_cart_5"
+    assert keyboard[0][0].text == "🛒 Add to Cart"  # default when no cart
+
+
+def test_render_product_card_shows_quantity_when_in_cart():
+    """When the product is already in the cart, show the quantity in the button."""
+    mock_product = {"id": 3, "name": "Widget", "category_name": "Gear",
+                    "price": "10.00", "stock": 5, "description": "A widget."}
+    cart = {
+        "items": [
+            {"product": 1, "quantity": 2, "subtotal": "20.00"},
+            {"product": 3, "quantity": 3, "subtotal": "30.00"},
+            {"product": 7, "quantity": 1, "subtotal": "5.00"},
+        ],
+        "cart_total": "55.00",
+    }
+
+    text, keyboard = render_product_card(mock_product, cart)
+
+    assert "Widget" in text
+    assert len(keyboard) == 3
+    assert keyboard[0][0].text == "🛒 Add Another (3 in Cart)"
+    assert keyboard[0][0].callback_data == "add_to_cart_3"
+
+
+def test_render_product_card_shows_default_when_not_in_cart():
+    """When the product is not in the cart, fall back to default Add to Cart."""
+    mock_product = {"id": 9, "name": "Sticker", "category_name": "Gear",
+                    "price": "2.50", "stock": 100, "description": "A sticker."}
+    cart = {
+        "items": [
+            {"product": 1, "quantity": 2, "subtotal": "20.00"},
+            {"product": 3, "quantity": 3, "subtotal": "30.00"},
+        ],
+        "cart_total": "50.00",
+    }
+
+    text, keyboard = render_product_card(mock_product, cart)
+
+    assert "Sticker" in text
+    assert len(keyboard) == 3
+    assert keyboard[0][0].text == "🛒 Add to Cart"
+    assert keyboard[0][0].callback_data == "add_to_cart_9"
 
 
 def test_parse_product_id():
@@ -88,9 +130,10 @@ async def test_catalog_command_sends_new_message(
 
 @pytest.mark.asyncio
 async def test_view_product_detail_edits_message():
-    """view_product_detail fetches product detail and edits the message."""
+    """view_product_detail fetches product detail + cart and edits the message."""
     mock_update = MagicMock()
     mock_update.callback_query.data = "view_prod_1"
+    mock_update.callback_query.from_user.id = 123
     mock_update.callback_query.answer = AsyncMock()
     mock_update.callback_query.edit_message_text = AsyncMock()
 

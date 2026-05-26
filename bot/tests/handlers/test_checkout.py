@@ -283,6 +283,29 @@ async def test_skip_save_confirm():
 
 
 @pytest.mark.asyncio
+async def test_finalize_order_removes_keyboard_immediately():
+    """finalize_order strips inline keyboard at start to prevent double-clicks."""
+    api = MockApiClient(
+        product_details={1: {"id": 1, "name": "Widget", "price": "9.99"}}
+    )
+    await api.add_product_to_cart(123, 1)
+    ctx = _make_context(api)
+    ctx.user_data["checkout_address"] = "123 Main St"
+
+    update = MagicMock()
+    update.callback_query = AsyncMock()
+    update.callback_query.from_user.id = 123
+    update.effective_chat.send_message = AsyncMock()
+
+    await finalize_order(update, ctx)
+
+    # Assert the reply markup was stripped at the beginning
+    update.callback_query.edit_message_reply_markup.assert_called_once_with(
+        reply_markup=None
+    )
+
+
+@pytest.mark.asyncio
 async def test_finalize_order_success():
     """finalize_order submits order and returns END."""
     api = MockApiClient(

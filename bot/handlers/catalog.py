@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -44,8 +45,14 @@ def render_catalog_menu(products: list) -> tuple[str, list]:
     return "📦 *Available Products*:\nSelect an item to view details:", keyboard
 
 
-def render_product_card(product: dict) -> tuple[str, list]:
-    """Generates the text body and inline keyboard for a product card."""
+def render_product_card(
+    product: dict, cart: dict | None = None
+) -> tuple[str, list]:
+    """Generates the text body and inline keyboard for a product card.
+
+    When *cart* is provided, the function checks whether the product is
+    already in the cart and adjusts the primary button text accordingly.
+    """
     if not product:
         return "Product record could not be found.", []
 
@@ -57,12 +64,21 @@ def render_product_card(product: dict) -> tuple[str, list]:
         f"_{product['description']}_"
     )
 
+    # Determine button label based on cart presence
+    in_cart_qty = 0
+    if cart is not None and cart.get("items"):
+        for item in cart["items"]:
+            if item.get("product") == product["id"]:
+                in_cart_qty = item.get("quantity", 0)
+                break
+
+    if in_cart_qty:
+        button_text = f"🛒 Add Another ({in_cart_qty} in Cart)"
+    else:
+        button_text = "🛒 Add to Cart"
+
     keyboard = [
-        [
-            InlineKeyboardButton(
-                "🛒 Add to Cart", callback_data=f"add_to_cart_{product['id']}"
-            )
-        ],
+        [InlineKeyboardButton(button_text, callback_data=f"add_to_cart_{product['id']}")],
         [InlineKeyboardButton("🛍️ View Cart", callback_data="view_cart_nav")],
         [InlineKeyboardButton("⬅️ Back to Catalog", callback_data="back_catalog")],
     ]
@@ -108,10 +124,16 @@ async def view_product_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
     await query.answer()
 
     product_id = parse_product_id(query.data)
+    tg_id = query.from_user.id
     ctx: BotContext = context.application.bot_data["ctx"]
-    product = await ctx.api.fetch_product_detail(product_id)
 
-    text, keyboard = render_product_card(product)
+    # Fetch product details and cart concurrently
+    product, cart = await asyncio.gather(
+        ctx.api.fetch_product_detail(product_id),
+        ctx.api.fetch_user_cart(tg_id),
+    )
+
+    text, keyboard = render_product_card(product, cart)
     markup = InlineKeyboardMarkup(keyboard) if keyboard else None
 
     await query.edit_message_text(

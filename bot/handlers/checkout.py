@@ -253,6 +253,12 @@ async def finalize_order(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await query.answer()
     tg_id = query.from_user.id
 
+    # Immediately strip the inline keyboard to prevent double-clicks
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
     address_text = context.user_data.get("checkout_address", "N/A")
     ctx: BotContext = context.application.bot_data["ctx"]
     order_data = await ctx.api.submit_order(tg_id, address_text)
@@ -264,13 +270,22 @@ async def finalize_order(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     context.user_data["active_menu_id"] = None
 
     if not order_data:
-        await update.effective_chat.send_message(
-            text=(
-                "❌ *Checkout Failed*\nYour items could not be processed. "
-                "This may be due to insufficient stock or a network error."
-            ),
-            parse_mode="Markdown",
+        # Defensive failure view — reconstruct navigation so the user
+        # isn't left stranded with no controls
+        failure_text = (
+            "❌ *Checkout Failed*\nYour items could not be processed. "
+            "This may be due to insufficient stock or a network error."
         )
+        failure_keyboard = [
+            [InlineKeyboardButton("📦 Browse Catalog", callback_data="back_catalog")],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="back_start")],
+        ]
+        sent_msg = await update.effective_chat.send_message(
+            text=failure_text,
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(failure_keyboard),
+        )
+        context.user_data["active_menu_id"] = sent_msg.message_id
         context.user_data.pop("checkout_address", None)
         context.user_data.pop("address_was_saved", None)
         context.user_data.pop("saved_addresses", None)
