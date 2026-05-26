@@ -137,36 +137,114 @@ def test_render_welcome_dashboard_with_shipped_order():
     assert keyboard[1][0].callback_data == "view_history_nav"
 
 
-# ---- start / back_to_start (need app.bot_data["ctx"]) -------------------
+# ---- start / back_to_start (stateful — need app.bot_data["ctx"]) --------
 
 
-@pytest.mark.asyncio
-async def test_start_command_renders_menu(context_with_app):
-    """start() syncs user and sends a welcome message."""
-    context_with_app.user_data = {}
-
+def _make_start_update():
+    """Build a minimial Update surrogate with the fields ``start`` reads."""
     update = MagicMock()
     update.effective_user.id = 123
+    update.effective_user.first_name = "Test"
     update.effective_user.username = "test_user"
     update.effective_user.first_name = "Test"
     update.effective_user.last_name = "User"
-    update.effective_chat.send_message = AsyncMock()
-    update.effective_chat.send_message.return_value.message_id = 404
-    update.message = None
-
-    await start(update, context_with_app)
-
-    update.effective_chat.send_message.assert_called_once()
-    assert context_with_app.user_data["active_menu_id"] == 404
-    ctx = context_with_app.application.bot_data["ctx"]
-    assert 123 in ctx.api.users
+    update.effective_chat.id = 456
+    # Provide a mock message so the footprint-eviction path can run
+    update.message = MagicMock()
+    update.message.delete = AsyncMock()
+    return update
 
 
 @pytest.mark.asyncio
-async def test_back_to_start_edits_message():
+async def test_start_creates_new_canvas_when_none_exists(context_with_app):
+    """Test 1 – Pristine Generation: no active_menu_id → send_message."""
+    context_with_app.user_data = {}  # no active_menu_id
+    context_with_app.bot.edit_message_text = AsyncMock()
+    context_with_app.bot.send_message = AsyncMock()  # not used by handler
+
+    update = _make_start_update()
+    update.effective_chat.send_message = AsyncMock()
+    update.effective_chat.send_message.return_value.message_id = 404
+
+    await start(update, context_with_app)
+
+    # Should have deleted the incoming /start message
+    update.message.delete.assert_called_once()
+
+    # Should have sent a *new* message (no edit attempt since no active_menu_id)
+    update.effective_chat.send_message.assert_called_once()
+    assert context_with_app.user_data["active_menu_id"] == 404
+
+    # User should be synced into the mock API
+    ctx = context_with_app.application.bot_data["ctx"]
+    assert 123 in ctx.api.users
+
+    # The dashboard text should include the expected welcome content
+    call_kwargs = update.effective_chat.send_message.call_args[1]
+    assert "Welcome back, Test!" in call_kwargs["text"]
+
+
+@pytest.mark.asyncio
+async def test_start_edits_existing_canvas(context_with_app):
+    """Test 2 – Smooth Mutation: active_menu_id set → edit_message_text."""
+    context_with_app.user_data = {"active_menu_id": 777}
+    context_with_app.bot.edit_message_text = AsyncMock()
+
+    update = _make_start_update()
+    # send_message should NOT be called — only edit_message_text
+    update.effective_chat.send_message = AsyncMock()
+
+    await start(update, context_with_app)
+
+    # The incoming message should still be deleted
+    update.message.delete.assert_called_once()
+
+    # Should edit the existing canvas instead of sending a new message
+    context_with_app.bot.edit_message_text.assert_called_once()
+    call_kwargs = context_with_app.bot.edit_message_text.call_args[1]
+    assert call_kwargs["message_id"] == 777
+    assert "Welcome back, Test!" in call_kwargs["text"]
+
+    # Should NOT have sent a brand new message
+    update.effective_chat.send_message.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_start_heals_when_canvas_is_missing(context_with_app):
+    """Test 3 – Structural Self-Healing: edit raises → fall back to send."""
+    context_with_app.user_data = {"active_menu_id": 777}
+    # Simulate a deleted/expired canvas
+    context_with_app.bot.edit_message_text = AsyncMock(
+        side_effect=Exception("Message to edit not found")
+    )
+
+    update = _make_start_update()
+    update.effective_chat.send_message = AsyncMock()
+    update.effective_chat.send_message.return_value.message_id = 808
+
+    await start(update, context_with_app)
+
+    # Should have attempted the edit
+    context_with_app.bot.edit_message_text.assert_called_once()
+    edit_kwargs = context_with_app.bot.edit_message_text.call_args[1]
+    assert edit_kwargs["message_id"] == 777
+
+    # Exception should have been caught — should fall back to send_message
+    update.effective_chat.send_message.assert_called_once()
+    send_kwargs = update.effective_chat.send_message.call_args[1]
+    assert "Welcome back, Test!" in send_kwargs["text"]
+
+    # New message ID should be stored
+    assert context_with_app.user_data["active_menu_id"] == 808
+
+
+@pytest.mark.asyncio
+async def test_back_to_start_edits_message(context_with_app):
     update = MagicMock()
     update.callback_query = AsyncMock()
-    context = MagicMock()
+    update.callback_query.from_user.id = 123
+    update.callback_query.from_user.first_name = "Test"
+    context = context_with_app
 
     await back_to_start(update, context)
 
@@ -174,4 +252,4 @@ async def test_back_to_start_edits_message():
     update.callback_query.edit_message_text.assert_called_once()
 
     call_args = update.callback_query.edit_message_text.call_args[1]
-    assert "Welcome to the Retail Bot!" in call_args["text"]
+    assert "Welcome back, Test!" in call_args["text"]

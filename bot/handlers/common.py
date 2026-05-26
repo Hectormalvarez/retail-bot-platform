@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -122,27 +123,64 @@ async def clear_chat_footprint(update: Update, context: ContextTypes.DEFAULT_TYP
 
 # ---- handlers -----------------------------------------------------------
 
-_WELCOME_TEXT = "Welcome to the Retail Bot! Use the options below to navigate:"
-
-
-def _build_welcome_keyboard() -> InlineKeyboardMarkup:
-    keyboard = [
-        [InlineKeyboardButton("📦 Browse Catalog", callback_data="back_catalog")],
-        [InlineKeyboardButton("🛍️ View Your Cart", callback_data="view_cart_nav")],
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Greets the user, syncs profile data, and initiates a clean dashboard."""
-    await clear_chat_footprint(update, context)
+    """Greets the user, syncs profile data, and initiates a clean dashboard.
 
+    Uses :func:`render_welcome_dashboard` to produce the message and
+    keyboard based on live cart / order state fetched concurrently from
+    the API.  The edit/heal loop ensures the dashboard canvas is always
+    correctly positioned in the chat timeline.
+    """
+    # 1. Footprint eviction – delete the raw /start text from the timeline
+    if update.message:
+        try:
+            await update.message.delete()
+        except Exception:
+            pass
+
+    # 2. Gather identity
+    tg_id = update.effective_user.id
+    user_name = update.effective_user.first_name
+
+    # 3. Concurrent data fetching
     ctx: BotContext = context.application.bot_data["ctx"]
     user_ctx = extract_user_context(update)
+    cart, orders = await asyncio.gather(
+        ctx.api.fetch_user_cart(tg_id),
+        ctx.api.fetch_user_orders(tg_id),
+    )
+
+    # 4. Sync user profile (fire-and-forget from the caller's perspective)
     await ctx.api.sync_user(user_ctx)
 
+    # 5. Parse latest order
+    latest_order = orders[0] if orders else None
+
+    # 6. Build dashboard content (pure function)
+    text_body, keyboard = render_welcome_dashboard(
+        user_name, cart, latest_order,
+    )
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    # 7. Self-healing edit loop
+    active_menu_id = context.user_data.get("active_menu_id")
+    if active_menu_id is not None:
+        try:
+            await context.bot.edit_message_text(
+                chat_id=update.effective_chat.id,
+                message_id=active_menu_id,
+                text=text_body,
+                reply_markup=reply_markup,
+            )
+            return
+        except Exception:
+            # Canvas was deleted / expired – fall through to send_message
+            pass
+
     sent_msg = await update.effective_chat.send_message(
-        text=_WELCOME_TEXT, reply_markup=_build_welcome_keyboard()
+        text=text_body,
+        reply_markup=reply_markup,
     )
     context.user_data["active_menu_id"] = sent_msg.message_id
 
@@ -152,8 +190,22 @@ async def back_to_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
+    tg_id = query.from_user.id
+    user_name = query.from_user.first_name
+
+    ctx: BotContext = context.application.bot_data["ctx"]
+    cart, orders = await asyncio.gather(
+        ctx.api.fetch_user_cart(tg_id),
+        ctx.api.fetch_user_orders(tg_id),
+    )
+    latest_order = orders[0] if orders else None
+
+    text_body, keyboard = render_welcome_dashboard(
+        user_name, cart, latest_order,
+    )
     await query.edit_message_text(
-        text=_WELCOME_TEXT, reply_markup=_build_welcome_keyboard()
+        text=text_body,
+        reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
 
