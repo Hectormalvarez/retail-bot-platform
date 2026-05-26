@@ -64,7 +64,7 @@ class TestMockApiClient:
         await client.add_product_to_cart(123, 1)
         order = await client.submit_order(123, "addr")
         assert order is not None
-        assert order["total_amount"] == "25.0"
+        assert order["total_amount"] == "25.00"
 
         cart = await client.fetch_user_cart(123)
         assert cart["items"] == []
@@ -292,12 +292,14 @@ class TestHttpApiClient:
                 "cart_total": "10.00",
             },
         )
-        mock_instance.patch.return_value = self._mock_response(
-            mocker, {"quantity": 2}
+        mock_instance.post.return_value = self._mock_response(
+            mocker, {"id": 11}
         )
         ok = await http_client.add_product_to_cart(123, 5)
         assert ok is True
-        mock_instance.patch.assert_called_once()
+        # Now always POSTs — server-side handles dedup/increment
+        mock_instance.post.assert_called_once()
+        mock_instance.patch.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_add_product_to_cart_new_item(self, http_client, mocker):
