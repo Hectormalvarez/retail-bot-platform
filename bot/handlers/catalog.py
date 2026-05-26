@@ -169,6 +169,3 @@ def register_handlers(app) -> None:
     app.add_handler(
         CallbackQueryHandler(back_to_catalog, pattern=r"^back_catalog$")
     )
-    app.add_handler(
-        CallbackQueryHandler(back_to_catalog, pattern=r"^back_start$")
-    )

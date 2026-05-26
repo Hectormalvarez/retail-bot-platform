@@ -6,7 +6,7 @@ import asyncio
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import CommandHandler, ContextTypes
+from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes
 
 from context import BotContext
 
@@ -220,3 +220,6 @@ def register_handlers(app) -> None:
     app.add_handler(
         CommandHandler("cancel", start)
     )  # fallback command
+    app.add_handler(
+        CallbackQueryHandler(back_to_start, pattern=r"^back_start$")
+    )
