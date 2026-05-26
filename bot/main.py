@@ -2,7 +2,7 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from telegram.ext import Application, ApplicationBuilder, PicklePersistence
+from telegram.ext import Application, ApplicationBuilder
 
 from config import BotConfig
 from context import BotContext
@@ -30,12 +30,10 @@ def build_app(config: BotConfig | None = None) -> Application:
         config = BotConfig.from_env()
 
     os.makedirs(config.data_dir, exist_ok=True)
-    persistence = PicklePersistence(filepath=config.persistence_path)
 
     app = (
         ApplicationBuilder()
         .token(config.token)
-        .persistence(persistence)
         .build()
     )
 
