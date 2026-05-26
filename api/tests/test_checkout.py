@@ -71,10 +71,11 @@ def test_checkout_missing_fields_returns_400(api_client):
 
 @pytest.mark.django_db
 def test_order_service_create_order_directly(test_user, test_cart, test_product):
-    """Unit test OrderService.create_order — cart items become OrderItems."""
+    """Integration test OrderService.create_order — cart items become OrderItems."""
     CartItem.objects.create(cart=test_cart, product=test_product, quantity=3)
 
-    order, error = OrderService.create_order(
+    service = OrderService()
+    order, error = service.create_order(
         user_id=test_user.telegram_id,
         shipping_address="42 Test Ave",
     )
@@ -99,7 +100,8 @@ def test_order_service_create_order_directly(test_user, test_cart, test_product)
 @pytest.mark.django_db
 def test_order_service_create_order_invalid_user_returns_error(db):
     """OrderService.create_order with a non-existent user returns an error."""
-    order, error = OrderService.create_order(
+    service = OrderService()
+    order, error = service.create_order(
         user_id=9999999,
         shipping_address="Nowhere",
     )

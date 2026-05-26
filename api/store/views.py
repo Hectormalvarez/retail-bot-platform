@@ -44,11 +44,15 @@ class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.all()
     serializer_class = OrderSerializer
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._order_service = OrderService()
+
     def create(self, request, *args, **kwargs):
         user_id = request.data.get("user")
         shipping_address = request.data.get("shipping_address")
 
-        order, error = OrderService.create_order(user_id, shipping_address)
+        order, error = self._order_service.create_order(user_id, shipping_address)
         if error:
             return Response({"error": error}, status=status.HTTP_400_BAD_REQUEST)
 

@@ -3,20 +3,39 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Any
 
 from django.db import transaction
 
-from .models import Cart, Order, OrderItem, Product, TelegramUser
+from .models import Order
+from .repositories import (
+    DjangoCartRepo,
+    DjangoOrderRepo,
+    DjangoProductRepo,
+    DjangoUserRepo,
+)
 
 
 class OrderService:
-    """Handles the checkout flow – stock validation, order creation, cart cleanup."""
+    """Handles the checkout flow – stock validation, order creation, cart cleanup.
 
-    @staticmethod
+    Accepts injected repository instances so it can be unit-tested without a DB.
+    """
+
+    def __init__(
+        self,
+        user_repo: DjangoUserRepo | None = None,
+        cart_repo: DjangoCartRepo | None = None,
+        product_repo: DjangoProductRepo | None = None,
+        order_repo: DjangoOrderRepo | None = None,
+    ):
+        self.users = user_repo or DjangoUserRepo()
+        self.carts = cart_repo or DjangoCartRepo()
+        self.products = product_repo or DjangoProductRepo()
+        self.orders = order_repo or DjangoOrderRepo()
+
     @transaction.atomic
     def create_order(
-        user_id: int, shipping_address: str
+        self, user_id: int, shipping_address: str
     ) -> tuple[Order | None, str | None]:
         """Create an order from the user's cart.
 
@@ -25,40 +44,38 @@ class OrderService:
         (order, None) on success, or (None, error_message) on failure.
         """
         try:
-            user = TelegramUser.objects.get(telegram_id=user_id)
-            cart = Cart.objects.get(user=user)
-        except (TelegramUser.DoesNotExist, Cart.DoesNotExist):
+            user = self.users.get_by_telegram(user_id)
+            cart = self.carts.get_by_user(user)
+        except Exception:
             return None, "Invalid user context or missing cart"
 
-        cart_items = cart.items.select_related("product").all()
-        if not cart_items.exists():
+        cart_items = self.carts.get_items(cart)
+        if not cart_items:
             return None, "Shopping cart is empty"
 
         total_amount: Decimal = Decimal("0.00")
         for item in cart_items:
-            product = Product.objects.select_for_update().get(id=item.product.id)
+            product = self.products.get_for_update(item.product.id)
             if product.stock < item.quantity:
                 return None, f"Insufficient stock available for {product.name}"
             total_amount += product.price * item.quantity
 
-        order = Order.objects.create(
+        order = self.orders.create(
             user=user,
             total_amount=total_amount,
-            shipping_address={"raw_address": shipping_address},
+            shipping_address=shipping_address,
         )
 
         for item in cart_items:
-            product = Product.objects.get(id=item.product.id)
-            product.stock -= item.quantity
-            product.save(update_fields=["stock"])
-
-            OrderItem.objects.create(
+            product = self.products.get_by_id(item.product.id)
+            self.products.decrement_stock(product, item.quantity)
+            self.orders.create_item(
                 order=order,
                 product=item.product,
                 quantity=item.quantity,
                 price_at_purchase=item.product.price,
             )
 
-        cart_items.delete()
+        self.carts.delete_items(cart)
 
         return order, None
