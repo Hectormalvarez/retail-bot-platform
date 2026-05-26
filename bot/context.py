@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from config import BotConfig
-
 from api_client import ApiClient
+from config import BotConfig
 
 
 @dataclass

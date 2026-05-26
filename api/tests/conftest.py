@@ -5,6 +5,7 @@ from .factories import (
     CartItemFactory,
     CategoryFactory,
     OrderFactory,
+    OrderItemFactory,
     ProductFactory,
     TelegramUserFactory,
 )

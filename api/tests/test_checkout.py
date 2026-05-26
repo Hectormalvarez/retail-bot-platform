@@ -113,7 +113,6 @@ def test_order_service_create_order_invalid_user_returns_error(db):
 @pytest.mark.django_db
 def test_list_orders_filtered_by_user_and_sorted(api_client, db):
     """GET /api/orders/?user=<id> returns only that user's orders, newest first."""
-    from store.models import Order
     from .factories import TelegramUserFactory, OrderFactory
 
     user_a = TelegramUserFactory(telegram_id=1001, first_name="Alice")

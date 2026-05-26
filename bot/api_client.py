@@ -324,7 +324,8 @@ class MockApiClient(ApiClient):
                             ).get("price", 0)
                         )
                         item["subtotal"] = f"{unit_price * new_qty:.2f}"
-                    cart["cart_total"] = f"{sum(float(i['subtotal']) for i in cart['items']):.2f}"
+                    cart_total = sum(float(i["subtotal"]) for i in cart["items"])
+                    cart["cart_total"] = f"{cart_total:.2f}"
                     return True
         return False
 

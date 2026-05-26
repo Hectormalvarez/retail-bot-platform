@@ -7,7 +7,6 @@ import pytest
 
 from api_client import HttpApiClient, MockApiClient
 
-
 # ---------------------------------------------------------------------------
 # MockApiClient (in-memory) – integration-like without a network
 # ---------------------------------------------------------------------------

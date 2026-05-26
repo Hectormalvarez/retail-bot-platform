@@ -6,10 +6,10 @@ from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, ApplicationBuilder, ContextTypes
 
+from api_client import HttpApiClient
 from config import BotConfig
 from context import BotContext
 from handlers import register_all
-from api_client import HttpApiClient
 
 load_dotenv()
 
@@ -28,10 +28,13 @@ async def global_error_handler(
     Logs the full traceback securely and, when possible, sends a friendly
     message to the active chat so the user knows a minor refresh is needed.
     """
+    traceback_str = "".join(
+        traceback.format_exception(None, context.error, context.error.__traceback__)
+    )
     logger.error(
         "Unhandled exception: %s\n%s",
         context.error,
-        "".join(traceback.format_exception(None, context.error, context.error.__traceback__)),
+        traceback_str,
     )
 
     if update is not None and update.effective_chat is not None:

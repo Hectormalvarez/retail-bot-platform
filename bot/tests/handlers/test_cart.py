@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from api_client import MockApiClient
 from handlers.cart import (
     add_to_cart_handler,
     adjust_quantity_handler,
@@ -9,9 +10,6 @@ from handlers.cart import (
     parse_quantity_action,
     render_cart_menu,
 )
-
-from api_client import MockApiClient
-
 
 # ---- pure helpers (no DI needed) ----------------------------------------
 
@@ -104,7 +102,7 @@ async def test_add_to_cart_handler_answers_callback():
 @pytest.mark.asyncio
 async def test_add_to_cart_handler_failure_shows_error():
     """add_to_cart_handler answers with error when API returns False."""
-    from unittest.mock import AsyncMock as AM, MagicMock as MM
+    AM, MM = AsyncMock, MagicMock
 
     mock_update = MM()
     mock_update.callback_query.data = "add_to_cart_999"

@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from telegram.error import BadRequest
 
+from api_client import MockApiClient
 from handlers.catalog import (
     back_to_catalog,
     catalog_command,
@@ -11,9 +12,6 @@ from handlers.catalog import (
     render_product_card,
     view_product_detail,
 )
-
-from api_client import MockApiClient
-
 
 # ---- pure helpers (no DI needed) ----------------------------------------
 
@@ -26,7 +24,7 @@ def test_render_catalog_menu_empty():
 
 
 def test_render_catalog_menu_populated():
-    """Verifies that a populated catalog lists products with correct navigation buttons."""
+    """Verifies a populated catalog lists products with correct navigation buttons."""
     mock_products = [{"id": 1, "name": "T-Shirt", "price": "25.00"}]
     text, keyboard = render_catalog_menu(mock_products)
 

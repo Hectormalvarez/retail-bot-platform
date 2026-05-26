@@ -29,7 +29,11 @@ def render_cart_menu(cart: dict) -> tuple[str, list]:
         return (
             "🛒 *Your Shopping Cart is Empty.*",
             [
-                [InlineKeyboardButton("📦 Browse Catalog", callback_data="back_catalog")]
+                [
+                    InlineKeyboardButton(
+                        "📦 Browse Catalog", callback_data="back_catalog"
+                    ),
+                ]
             ],
         )
 

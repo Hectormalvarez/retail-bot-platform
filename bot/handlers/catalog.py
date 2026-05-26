@@ -40,7 +40,11 @@ def render_catalog_menu(products: list) -> tuple[str, list]:
     keyboard.extend(
         [
             [InlineKeyboardButton("🛍️ View Your Cart", callback_data="view_cart_nav")],
-            [InlineKeyboardButton("🏠 Return to Main Menu", callback_data="back_start")],
+            [
+                InlineKeyboardButton(
+                    "🏠 Return to Main Menu", callback_data="back_start"
+                ),
+            ],
         ]
     )
     return "📦 *Available Products*:\nSelect an item to view details:", keyboard
@@ -79,7 +83,11 @@ def render_product_card(
         button_text = "🛒 Add to Cart"
 
     keyboard = [
-        [InlineKeyboardButton(button_text, callback_data=f"add_to_cart_{product['id']}")],
+        [
+            InlineKeyboardButton(
+                button_text, callback_data=f"add_to_cart_{product['id']}"
+            ),
+        ],
         [InlineKeyboardButton("🛍️ View Cart", callback_data="view_cart_nav")],
         [InlineKeyboardButton("⬅️ Back to Catalog", callback_data="back_catalog")],
     ]
