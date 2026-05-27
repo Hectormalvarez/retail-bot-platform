@@ -38,6 +38,36 @@ class TestMockApiClient:
         assert result[0]["name"] == "T-Shirt"
 
     @pytest.mark.asyncio
+    async def test_fetch_products_filtered_by_category(self, client):
+        """Verifies that fetch_products with category_id filters results."""
+        # Add a product with a different category
+        client.products.append(
+            {"id": 2, "name": "Mug", "price": "15.00", "category": 2}
+        )
+        # The default product has no "category" key, so it won't match category=1
+        result = await client.fetch_products(category_id=1)
+        assert len(result) == 0
+
+        # Now add a product with category=1
+        client.products.append(
+            {"id": 3, "name": "Hat", "price": "12.00", "category": 1}
+        )
+        result = await client.fetch_products(category_id=1)
+        assert len(result) == 1
+        assert result[0]["id"] == 3
+
+    @pytest.mark.asyncio
+    async def test_fetch_categories(self, client):
+        """Verifies fetch_categories returns the categories list."""
+        result = await client.fetch_categories()
+        assert result == []
+
+        client.categories = [{"id": 1, "name": "Gear"}, {"id": 2, "name": "Apparel"}]
+        result = await client.fetch_categories()
+        assert len(result) == 2
+        assert result[0]["name"] == "Gear"
+
+    @pytest.mark.asyncio
     async def test_fetch_and_auto_create_cart(self, client):
         cart = await client.fetch_user_cart(123)
         assert cart is not None

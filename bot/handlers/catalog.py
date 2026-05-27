@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
@@ -23,31 +24,78 @@ def parse_product_id(callback_data: str) -> int:
     return int(callback_data.split("_")[-1])
 
 
-def render_catalog_menu(products: list) -> tuple[str, list]:
+def render_catalog_menu(
+    products: list, categories: list, page: int = 1, current_cat_id: int = 0
+) -> tuple[str, list]:
     """Generates the text body and inline keyboard markup for the catalog."""
-    if not products:
-        return "The catalog is currently empty or down for maintenance.", []
+    items_per_page = 5
+    total_pages = max(1, math.ceil(len(products) / items_per_page))
+    page = max(1, min(page, total_pages))  # clamp
 
-    keyboard = [
-        [
-            InlineKeyboardButton(
-                f"{p['name']} — ${p['price']}",
-                callback_data=f"view_prod_{p['id']}",
-            )
-        ]
-        for p in products
+    cat_name = (
+        next((c["name"] for c in categories if c["id"] == current_cat_id), "All")
+        if current_cat_id != 0
+        else "All"
+    )
+    text = f"📦 *Available Products*\nViewing: {cat_name} | Page {page} of {total_pages}\nSelect an item to view details:"
+
+    keyboard = []
+
+    # Category Filter Row (All + top 3 categories)
+    cat_buttons = [
+        InlineKeyboardButton(
+            "🟢 All" if current_cat_id == 0 else "All", callback_data="nav_cat_0_p_1"
+        )
     ]
+    for cat in categories[:3]:
+        prefix = "🟢 " if current_cat_id == cat["id"] else ""
+        cat_buttons.append(
+            InlineKeyboardButton(
+                f"{prefix}{cat['name']}", callback_data=f"nav_cat_{cat['id']}_p_1"
+            )
+        )
+    if cat_buttons:
+        keyboard.append(cat_buttons)
+
+    # Products slice
+    start_idx = (page - 1) * items_per_page
+    for p in products[start_idx : start_idx + items_per_page]:
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    f"{p['name']} — ${p['price']}", callback_data=f"view_prod_{p['id']}"
+                )
+            ]
+        )
+
+    # Pagination Controls
+    nav_row = []
+    if page > 1:
+        nav_row.append(
+            InlineKeyboardButton(
+                "⬅️ Prev", callback_data=f"nav_cat_{current_cat_id}_p_{page - 1}"
+            )
+        )
+    if page < total_pages:
+        nav_row.append(
+            InlineKeyboardButton(
+                "Next ➡️", callback_data=f"nav_cat_{current_cat_id}_p_{page + 1}"
+            )
+        )
+    if nav_row:
+        keyboard.append(nav_row)
+
     keyboard.extend(
         [
             [InlineKeyboardButton("🛍️ View Your Cart", callback_data="view_cart_nav")],
             [
                 InlineKeyboardButton(
                     "🏠 Return to Main Menu", callback_data="back_start"
-                ),
+                )
             ],
         ]
     )
-    return "📦 *Available Products*:\nSelect an item to view details:", keyboard
+    return text, keyboard
 
 
 def render_product_card(product: dict, cart: dict | None = None) -> tuple[str, list]:
@@ -100,44 +148,50 @@ def render_product_card(product: dict, cart: dict | None = None) -> tuple[str, l
 # ---- handlers ------------------------------------------------------------
 
 
-async def catalog_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Executes /catalog command to fetch and display available store items."""
-    await clear_chat_footprint(update, context)
-    ctx: BotContext = context.application.bot_data["ctx"]
-    products = await ctx.api.fetch_products()
-
-    text, keyboard = render_catalog_menu(products)
-    markup = InlineKeyboardMarkup(keyboard) if keyboard else None
-
-    sent_msg = await update.effective_chat.send_message(
-        text=text, parse_mode="Markdown", reply_markup=markup
-    )
-    context.user_data["active_menu_id"] = sent_msg.message_id
-
-
-async def back_to_catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handles navigation callback requests to return users to the catalog.
-
-    Swallows ``BadRequest("Message is not modified")`` — the UI is already
-    in the correct state so no action is needed.
-    """
+async def navigate_catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles /catalog command and paginated inline navigation."""
     query = update.callback_query
-    await query.answer()
+
+    cat_id = 0
+    page = 1
+
+    if query and query.data.startswith("nav_cat_"):
+        parts = query.data.split("_")
+        cat_id = int(parts[2])
+        page = int(parts[4])
+        await query.answer()
+    elif query and query.data == "back_catalog":
+        await query.answer()
+    else:
+        from handlers.common import clear_chat_footprint
+
+        await clear_chat_footprint(update, context)
 
     ctx: BotContext = context.application.bot_data["ctx"]
-    products = await ctx.api.fetch_products()
-    text, keyboard = render_catalog_menu(products)
+
+    api_cat_id = cat_id if cat_id != 0 else None
+    products, categories = await asyncio.gather(
+        ctx.api.fetch_products(category_id=api_cat_id), ctx.api.fetch_categories()
+    )
+
+    text, keyboard = render_catalog_menu(products, categories, page, cat_id)
     markup = InlineKeyboardMarkup(keyboard) if keyboard else None
 
-    try:
-        await query.edit_message_text(
+    if query:
+        try:
+            await query.edit_message_text(
+                text=text, parse_mode="Markdown", reply_markup=markup
+            )
+        except BadRequest as exc:
+            if "Message is not modified" in exc.message:
+                pass
+            else:
+                raise
+    else:
+        sent_msg = await update.effective_chat.send_message(
             text=text, parse_mode="Markdown", reply_markup=markup
         )
-    except BadRequest as exc:
-        if "Message is not modified" in exc.message:
-            pass  # Idempotent — the canvas is already correct.
-        else:
-            raise
+        context.user_data["active_menu_id"] = sent_msg.message_id
 
 
 async def view_product_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -173,8 +227,11 @@ async def view_product_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 def register_handlers(app) -> None:
-    app.add_handler(CommandHandler("catalog", catalog_command))
+    app.add_handler(CommandHandler("catalog", navigate_catalog))
+    app.add_handler(
+        CallbackQueryHandler(navigate_catalog, pattern=r"^nav_cat_\d+_p_\d+$")
+    )
+    app.add_handler(CallbackQueryHandler(navigate_catalog, pattern=r"^back_catalog$"))
     app.add_handler(
         CallbackQueryHandler(view_product_detail, pattern=r"^view_prod_\d+$")
     )
-    app.add_handler(CallbackQueryHandler(back_to_catalog, pattern=r"^back_catalog$"))

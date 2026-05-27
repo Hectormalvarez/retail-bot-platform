@@ -19,7 +19,12 @@ class ApiClient(ABC):
     """Abstract interface for the DRF backend API client."""
 
     @abstractmethod
-    async def fetch_products(self) -> list[dict[str, Any]]: ...
+    async def fetch_products(
+        self, category_id: int | None = None
+    ) -> list[dict[str, Any]]: ...
+
+    @abstractmethod
+    async def fetch_categories(self) -> list[dict[str, Any]]: ...
 
     @abstractmethod
     async def sync_user(self, user_data: dict[str, Any]) -> None: ...
@@ -123,8 +128,15 @@ class HttpApiClient(ApiClient):
 
     # ---- domain methods --------------------------------------------------
 
-    async def fetch_products(self) -> list[dict[str, Any]]:
-        data = await self._get("products/")
+    async def fetch_products(
+        self, category_id: int | None = None
+    ) -> list[dict[str, Any]]:
+        path = f"products/?category={category_id}" if category_id else "products/"
+        data = await self._get(path)
+        return data if isinstance(data, list) else []
+
+    async def fetch_categories(self) -> list[dict[str, Any]]:
+        data = await self._get("categories/")
         return data if isinstance(data, list) else []
 
     async def sync_user(self, user_data: dict[str, Any]) -> None:
@@ -226,6 +238,7 @@ class MockApiClient(ApiClient):
     product_details: dict[int, dict] = None  # type: ignore[assignment]
     carts: dict[int, dict] = None  # type: ignore[assignment]
     users: set[int] = None  # type: ignore[assignment]
+    categories: list[dict] = None  # type: ignore[assignment]
     next_cart_item_id: int = 1
     next_order_id: int = 1
     _addresses: list[dict] = None  # type: ignore[assignment]
@@ -236,6 +249,8 @@ class MockApiClient(ApiClient):
     def __post_init__(self) -> None:
         if self.products is None:
             self.products = []
+        if self.categories is None:
+            self.categories = []
         if self.product_details is None:
             self.product_details = {}
         if self.carts is None:
@@ -253,8 +268,13 @@ class MockApiClient(ApiClient):
                 "payment_instructions": "Send money to {venmo_handle} or {zelle_email} with note {order_id}",
             }
 
-    async def fetch_products(self) -> list[dict]:
+    async def fetch_products(self, category_id: int | None = None) -> list[dict]:
+        if category_id is not None:
+            return [p for p in self.products if p.get("category") == category_id]
         return self.products
+
+    async def fetch_categories(self) -> list[dict]:
+        return self.categories
 
     async def sync_user(self, user_data: dict) -> None:
         self.users.add(user_data["telegram_id"])
