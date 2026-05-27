@@ -64,16 +64,18 @@ async def test_clear_chat_footprint_handles_delete_exception():
 
 
 def test_render_orders_history_no_orders():
-    """An empty orders list returns the 'no orders' message with a back button."""
+    """An empty orders list returns the 'no orders' message with Browse Catalog and Back buttons."""
     text, keyboard = render_orders_history([])
 
     assert "don't have any past orders yet" in text
-    assert len(keyboard) == 1
-    assert keyboard[0][0].callback_data == "back_start"
+    assert len(keyboard) == 2
+    assert keyboard[0][0].callback_data == "back_catalog"
+    assert "Browse Catalog" in keyboard[0][0].text
+    assert keyboard[1][0].callback_data == "back_start"
 
 
 def test_render_orders_history_with_two_orders():
-    """A list of 2 orders produces 3 keyboard rows (2 orders + 1 back button)."""
+    """A list of 2 orders produces 4 keyboard rows (2 orders + 1 empty pagination row + 1 back button) with status emojis."""
     orders = [
         {"id": 101, "total_amount": "49.99", "status": "PENDING"},
         {"id": 202, "total_amount": "125.00", "status": "COMPLETED"},
@@ -83,24 +85,78 @@ def test_render_orders_history_with_two_orders():
 
     # Text assertions
     assert "Your Purchase History" in text
+    assert "Page 1 of 1" in text
 
-    # Button count: 3 rows (2 order buttons + 1 back button)
-    assert len(keyboard) == 3
+    # Button count: 4 rows (2 order buttons + 1 pagination row + 1 back button)
+    assert len(keyboard) == 4
 
-    # Order button assertions: now includes status label
+    # Pagination row (single page, empty)
+    assert len(keyboard[2]) == 0
+
+    # Order button assertions: now includes status emoji
     assert "Order #101" in keyboard[0][0].text
     assert "49.99" in keyboard[0][0].text
-    assert "(Pending)" in keyboard[0][0].text
+    assert "🟡" in keyboard[0][0].text
+    assert "(Pending" in keyboard[0][0].text
     assert keyboard[0][0].callback_data == "view_old_order_101"
 
     assert "Order #202" in keyboard[1][0].text
     assert "125.00" in keyboard[1][0].text
-    assert "(Completed)" in keyboard[1][0].text
+    assert "🟢" in keyboard[1][0].text
+    assert "(Completed" in keyboard[1][0].text
     assert keyboard[1][0].callback_data == "view_old_order_202"
 
     # Back button assertion
-    assert "Back to Main Menu" in keyboard[2][0].text
-    assert keyboard[2][0].callback_data == "back_start"
+    assert "Back to Main Menu" in keyboard[3][0].text
+    assert keyboard[3][0].callback_data == "back_start"
+
+
+def test_render_orders_history_pagination():
+    """With 10 orders, page 1 shows 5 orders + Next button, page 2 shows 5 orders + Prev button."""
+    orders = [
+        {"id": i, "total_amount": f"{i * 10}.00", "status": "PENDING"}
+        for i in range(1, 11)
+    ]
+
+    # Page 1: first 5 orders + Next button + Back button
+    text, keyboard = render_orders_history(orders, page=1)
+    assert "Your Purchase History" in text
+    assert "Page 1 of 2" in text
+    assert len(keyboard) == 7  # 5 order rows + 1 pagination row + 1 back button
+
+    # Order buttons show correct IDs
+    assert "Order #1" in keyboard[0][0].text
+    assert "Order #5" in keyboard[4][0].text
+
+    # Pagination row: Next button only
+    pagination_row = keyboard[5]
+    assert len(pagination_row) == 1
+    assert "Next" in pagination_row[0].text
+    assert "➡️" in pagination_row[0].text
+    assert pagination_row[0].callback_data == "view_history_p_2"
+
+    # Back button
+    assert keyboard[6][0].callback_data == "back_start"
+
+    # Page 2: last 5 orders + Prev button + Back button
+    text, keyboard = render_orders_history(orders, page=2)
+    assert "Your Purchase History" in text
+    assert "Page 2 of 2" in text
+    assert len(keyboard) == 7  # 5 order rows + 1 pagination row + 1 back button
+
+    # Order buttons show correct IDs
+    assert "Order #6" in keyboard[0][0].text
+    assert "Order #10" in keyboard[4][0].text
+
+    # Pagination row: Prev button only
+    pagination_row = keyboard[5]
+    assert len(pagination_row) == 1
+    assert "Prev" in pagination_row[0].text
+    assert "⬅️" in pagination_row[0].text
+    assert pagination_row[0].callback_data == "view_history_p_1"
+
+    # Back button
+    assert keyboard[6][0].callback_data == "back_start"
 
 
 # ---- render_welcome_dashboard (pure – no DI, no asyncio) ----------------

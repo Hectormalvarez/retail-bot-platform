@@ -149,19 +149,32 @@ def compute_address_label(addresses: list[dict]) -> str:
 
 
 async def view_history_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handles the "View Order History" callback button.
+    """Handles the "View Order History" callback button and pagination.
 
     Fetches the user's past orders from the API and renders an order history
     menu using the pure :func:`render_orders_history` presenter.
+
+    Parses the requested page from ``query.data``:
+    - ``view_history_nav`` → page 1
+    - ``view_history_p_X`` → page X
     """
     query = update.callback_query
     await query.answer()
+
+    # Parse the page number from callback data
+    data = query.data
+    if data == "view_history_nav":
+        page = 1
+    elif data.startswith("view_history_p_"):
+        page = int(data.split("_")[-1])
+    else:
+        page = 1
 
     tg_id = query.from_user.id
     ctx: BotContext = context.application.bot_data["ctx"]
     orders = await ctx.api.fetch_user_orders(tg_id)
 
-    text_body, keyboard = render_orders_history(orders)
+    text_body, keyboard = render_orders_history(orders, page=page)
     await query.edit_message_text(
         text=text_body,
         parse_mode="Markdown",
@@ -497,5 +510,10 @@ def register_handlers(app) -> None:
     )
     app.add_handler(
         CallbackQueryHandler(view_history_handler, pattern=r"^view_history_nav$")
+    )
+    app.add_handler(
+        CallbackQueryHandler(
+            view_history_handler, pattern=r"^view_history_p_\d+$"
+        )
     )
     app.add_handler(checkout_conv)

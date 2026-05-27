@@ -157,13 +157,14 @@ def _make_context(api=None):
 
 @pytest.mark.asyncio
 async def test_view_history_handler_with_no_orders():
-    """view_history_handler shows 'no past orders' when no orders exist."""
+    """view_history_handler shows 'no past orders' with Browse Catalog + Back buttons."""
     api = MockApiClient()
     ctx = _make_context(api)
 
     update = MagicMock()
     update.callback_query = AsyncMock()
     update.callback_query.from_user.id = 123
+    update.callback_query.data = "view_history_nav"
 
     await view_history_handler(update, ctx)
 
@@ -173,16 +174,17 @@ async def test_view_history_handler_with_no_orders():
     call_args = update.callback_query.edit_message_text.call_args[1]
     assert "don't have any past orders yet" in call_args["text"]
     assert call_args["parse_mode"] == "Markdown"
-    # Empty-state now has a back button keyboard
+    # Empty-state now has 2 buttons: Browse Catalog + Back to Main Menu
     reply_markup = call_args["reply_markup"]
     assert reply_markup is not None
-    assert len(reply_markup.inline_keyboard) == 1
-    assert "Back to Main Menu" in reply_markup.inline_keyboard[0][0].text
+    assert len(reply_markup.inline_keyboard) == 2
+    assert "Browse Catalog" in reply_markup.inline_keyboard[0][0].text
+    assert "Back to Main Menu" in reply_markup.inline_keyboard[1][0].text
 
 
 @pytest.mark.asyncio
 async def test_view_history_handler_with_orders():
-    """view_history_handler fetches orders and renders order history menu."""
+    """view_history_handler fetches orders and renders history with emojis and pagination."""
     api = MockApiClient(
         product_details={1: {"id": 1, "name": "Widget", "price": "9.99"}}
     )
@@ -197,6 +199,7 @@ async def test_view_history_handler_with_orders():
     update = MagicMock()
     update.callback_query = AsyncMock()
     update.callback_query.from_user.id = 123
+    update.callback_query.data = "view_history_nav"
 
     await view_history_handler(update, ctx)
 
@@ -209,14 +212,13 @@ async def test_view_history_handler_with_orders():
     reply_markup = call_args["reply_markup"]
     assert reply_markup is not None
 
-    # The inline keyboard should have 3 rows: 2 orders + 1 back button
-    assert len(reply_markup.inline_keyboard) == 3
-    # Order rows include status label
+    # The inline keyboard should have 4 rows: 2 orders + 1 pagination row (both prev/next disabled for single page) + 1 back button
+    assert len(reply_markup.inline_keyboard) == 4
+    # Order rows include status emoji
+    assert "🟡" in reply_markup.inline_keyboard[0][0].text
     assert "Order #1" in reply_markup.inline_keyboard[0][0].text
-    assert "(Pending)" in reply_markup.inline_keyboard[0][0].text
     assert "Order #2" in reply_markup.inline_keyboard[1][0].text
-    assert "(Pending)" in reply_markup.inline_keyboard[1][0].text
-    assert "Back to Main Menu" in reply_markup.inline_keyboard[2][0].text
+    assert "Back to Main Menu" in reply_markup.inline_keyboard[3][0].text
 
 
 # ---- handlers that need app.bot_data["ctx"] ------------------------------
@@ -521,15 +523,17 @@ async def test_cancel_command_fallback_sends_message():
 
 
 def test_render_orders_history_empty():
-    """render_orders_history returns no-orders text with a 1-button keyboard."""
+    """render_orders_history returns no-orders text with Browse Catalog + Back buttons."""
     text, keyboard = render_orders_history([])
     assert "don't have any past orders yet" in text
-    assert len(keyboard) == 1
-    assert keyboard[0][0].callback_data == "back_start"
+    assert len(keyboard) == 2
+    assert "Browse Catalog" in keyboard[0][0].text
+    assert keyboard[0][0].callback_data == "back_catalog"
+    assert keyboard[1][0].callback_data == "back_start"
 
 
 def test_render_orders_history_multiple_statuses():
-    """render_orders_history populates rows with correct status labels."""
+    """render_orders_history populates rows with correct status emojis."""
     orders = [
         {"id": 1, "total_amount": "10.00", "status": "PENDING"},
         {"id": 2, "total_amount": "25.00", "status": "COMPLETED"},
@@ -537,15 +541,22 @@ def test_render_orders_history_multiple_statuses():
     ]
     text, keyboard = render_orders_history(orders)
     assert "Your Purchase History" in text
-    assert len(keyboard) == 4  # 3 orders + back button
+    assert len(keyboard) == 5  # 3 orders + pagination row (1 page, no prev/next) + back button
 
-    # Order rows
-    assert "(Pending)" in keyboard[0][0].text
-    assert "(Completed)" in keyboard[1][0].text
-    assert "(Shipped)" in keyboard[2][0].text
+    # Order rows with emojis
+    assert "🟡" in keyboard[0][0].text
+    assert "(Pending" in keyboard[0][0].text
+    assert "🟢" in keyboard[1][0].text
+    assert "(Completed" in keyboard[1][0].text
+    assert "📦" in keyboard[2][0].text
+    assert "(Shipped" in keyboard[2][0].text
+
+    # Pagination row (single page, no buttons)
+    pagination_row = keyboard[3]
+    assert len(pagination_row) == 0
 
     # Back button
-    assert keyboard[3][0].callback_data == "back_start"
+    assert keyboard[4][0].callback_data == "back_start"
 
 
 # ---- view_historical_order_detail_handler tests --------------------------

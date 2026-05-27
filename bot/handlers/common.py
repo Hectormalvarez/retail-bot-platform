@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes
@@ -22,9 +23,19 @@ _ORDER_STATUS_LABELS = {
     "CANCELLED": "Cancelled",
 }
 
+_ORDER_STATUS_EMOJIS = {
+    "PENDING": "🟡",
+    "COMPLETED": "🟢",
+    "SHIPPED": "📦",
+    "CANCELLED": "🔴",
+}
+
+_ITEMS_PER_PAGE = 5
+
 
 def render_orders_history(
     orders: list[dict],
+    page: int = 1,
 ) -> tuple[str, list[list[InlineKeyboardButton]]]:
     """Render the order history menu text and inline keyboard layout.
 
@@ -35,6 +46,8 @@ def render_orders_history(
     orders : list[dict]
         The user's past orders. Each dict should have at least
         ``{"id": int, "total_amount": str}``.
+    page : int
+        The current page number (1-indexed). Defaults to 1.
 
     Returns
     -------
@@ -44,25 +57,51 @@ def render_orders_history(
     if not orders:
         text_body = "📜 *You don't have any past orders yet.*"
         keyboard = [
+            [InlineKeyboardButton("📦 Browse Catalog", callback_data="back_catalog")],
             [InlineKeyboardButton("⬅️ Back to Main Menu", callback_data="back_start")],
         ]
         return text_body, keyboard
 
+    total_pages = math.ceil(len(orders) / _ITEMS_PER_PAGE)
+    # Clamp page to valid range
+    page = max(1, min(page, total_pages))
+
+    start_idx = (page - 1) * _ITEMS_PER_PAGE
+    end_idx = start_idx + _ITEMS_PER_PAGE
+    page_orders = orders[start_idx:end_idx]
+    _labels = _ORDER_STATUS_LABELS
+
     text_body = (
         "📜 *Your Purchase History*\n"
         "Select an order below to view its full receipt and "
-        "cash-payment verification status:"
+        "cash-payment verification status:\n\n"
+        f"*Page {page} of {total_pages}*"
     )
 
     keyboard: list[list[InlineKeyboardButton]] = [
         [
             InlineKeyboardButton(
-                f"📦 Order #{o['id']} — ${o['total_amount']} ({o['status'].title()})",
+                f"{_ORDER_STATUS_EMOJIS.get(o['status'].upper(), '❓')} "
+                f"Order #{o['id']} — ${o['total_amount']} "
+                f"({_labels.get(o['status'].upper(), o['status'].title())})",
                 callback_data=f"view_old_order_{o['id']}",
             )
         ]
-        for o in orders
+        for o in page_orders
     ]
+
+    # Pagination row
+    pagination_buttons: list[InlineKeyboardButton] = []
+    if page > 1:
+        pagination_buttons.append(
+            InlineKeyboardButton("⬅️ Prev", callback_data=f"view_history_p_{page - 1}")
+        )
+    if page < total_pages:
+        pagination_buttons.append(
+            InlineKeyboardButton("Next ➡️", callback_data=f"view_history_p_{page + 1}")
+        )
+    keyboard.append(pagination_buttons)
+
     keyboard.append(
         [InlineKeyboardButton("⬅️ Back to Main Menu", callback_data="back_start")]
     )
