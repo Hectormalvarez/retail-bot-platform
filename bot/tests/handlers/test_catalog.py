@@ -128,6 +128,29 @@ def test_render_catalog_menu_show_cats_grid():
     assert keyboard[3][0].callback_data == "nav_cat_2_p_1"
 
 
+def test_render_catalog_menu_dynamic_ribbon():
+    """Verifies that selecting a category outside the top 2 replaces the 2nd slot."""
+    mock_categories = [
+        {"id": 1, "name": "Cat 1"},
+        {"id": 2, "name": "Cat 2"},
+        {"id": 3, "name": "Cat 3"},
+        {"id": 4, "name": "Cat 4"},
+    ]
+
+    # Test default (Cat 0 / All)
+    _, keyboard_default = render_catalog_menu([], mock_categories, current_cat_id=0)
+    buttons_default = keyboard_default[0]
+    assert buttons_default[1].text == "Cat 1"
+    assert buttons_default[2].text == "Cat 2"
+
+    # Test active external (Cat 4)
+    _, keyboard_active = render_catalog_menu([], mock_categories, current_cat_id=4)
+    buttons_active = keyboard_active[0]
+    assert buttons_active[1].text == "Cat 1"
+    assert buttons_active[2].text == "🟢 Cat 4"
+    assert buttons_active[3].text == "More 🔽"
+
+
 def test_render_catalog_menu_empty_products_with_categories():
     """When products list is empty but categories exist, still show filter ribbon."""
     mock_categories = [{"id": 1, "name": "Gear"}]

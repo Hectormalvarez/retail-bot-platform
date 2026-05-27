@@ -81,7 +81,7 @@ def render_catalog_menu(
 
     keyboard = []
 
-    # Category Filter Row (All + top 2 + More)
+    # Category Filter Row
     cat_buttons = [
         InlineKeyboardButton(
             "🟢 All" if current_cat_id == 0 else "All", callback_data="nav_cat_0_p_1"
@@ -89,8 +89,21 @@ def render_catalog_menu(
     ]
 
     if len(categories) > 3:
-        visible_cats = categories[:2]
         has_more = True
+        default_cats = categories[:2]
+
+        # If no category is selected, or the selected one is already in the default 2, show defaults.
+        if current_cat_id == 0 or current_cat_id in [c["id"] for c in default_cats]:
+            visible_cats = default_cats
+        else:
+            # Swap the second slot for the currently active category
+            current_cat = next(
+                (c for c in categories if c["id"] == current_cat_id), None
+            )
+            if current_cat:
+                visible_cats = [default_cats[0], current_cat]
+            else:
+                visible_cats = default_cats
     else:
         visible_cats = categories
         has_more = False
