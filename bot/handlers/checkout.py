@@ -367,29 +367,21 @@ async def skip_save_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 async def finalize_order(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
-    tg_id = query.from_user.id
 
-    # Immediately strip the inline keyboard to prevent double-clicks
-    try:
-        await query.edit_message_reply_markup(reply_markup=None)
-    except Exception:
-        pass
+    cbq_id = query.id
+    if context.user_data.get("_last_cbq_id") == cbq_id:
+        logger.debug("Duplicate callback query ignored: %s", cbq_id)
+        return ConversationHandler.END
+    context.user_data["_last_cbq_id"] = cbq_id
+
+    tg_id = query.from_user.id
 
     address_text = context.user_data.get("checkout_address", "N/A")
     ctx: BotContext = context.application.bot_data["ctx"]
     order_data = await ctx.api.submit_order(tg_id, address_text)
-
-    try:
-        await query.message.delete()
-    except Exception:
-        pass
-    context.user_data["active_menu_id"] = None
-
     config = await ctx.api.fetch_store_config()
 
     if not order_data:
-        # Defensive failure view — reconstruct navigation so the user
-        # isn't left stranded with no controls
         failure_text = (
             "❌ *Checkout Failed*\nYour items could not be processed. "
             "This may be due to insufficient stock or a network error."
@@ -398,27 +390,36 @@ async def finalize_order(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             [InlineKeyboardButton("📦 Browse Catalog", callback_data="back_catalog")],
             [InlineKeyboardButton("🏠 Main Menu", callback_data="back_start")],
         ]
-        sent_msg = await update.effective_chat.send_message(
-            text=failure_text,
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(failure_keyboard),
-        )
-        context.user_data["active_menu_id"] = sent_msg.message_id
+        try:
+            await query.edit_message_text(
+                text=failure_text,
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(failure_keyboard),
+            )
+        except Exception as exc:
+            logger.debug("Failure screen redraw skipped: %s", exc)
+
         context.user_data.pop("checkout_address", None)
         context.user_data.pop("address_was_saved", None)
         context.user_data.pop("saved_addresses", None)
+        context.user_data.pop("active_menu_id", None)
         return ConversationHandler.END
 
     text_body, keyboard = render_order_receipt(order_data, address_text, config)
-    await update.effective_chat.send_message(
-        text=text_body,
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-    )
+
+    try:
+        await query.edit_message_text(
+            text=text_body,
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+    except Exception as exc:
+        logger.debug("Receipt screen redraw skipped: %s", exc)
 
     context.user_data.pop("checkout_address", None)
     context.user_data.pop("address_was_saved", None)
     context.user_data.pop("saved_addresses", None)
+    context.user_data.pop("active_menu_id", None)
     return ConversationHandler.END
 
 

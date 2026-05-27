@@ -404,8 +404,8 @@ async def test_skip_save_confirm():
 
 
 @pytest.mark.asyncio
-async def test_finalize_order_removes_keyboard_immediately():
-    """finalize_order strips inline keyboard at start to prevent double-clicks."""
+async def test_finalize_order_debounces_duplicate_callback():
+    """finalize_order ignores duplicate callback queries via _last_cbq_id guard."""
     api = MockApiClient(
         product_details={1: {"id": 1, "name": "Widget", "price": "9.99"}}
     )
@@ -416,14 +416,22 @@ async def test_finalize_order_removes_keyboard_immediately():
     update = MagicMock()
     update.callback_query = AsyncMock()
     update.callback_query.from_user.id = 123
-    update.effective_chat.send_message = AsyncMock()
+    # Simulate a specific callback query id
+    update.callback_query.id = "cbq_123"
 
-    await finalize_order(update, ctx)
+    # First call — process normally
+    state1 = await finalize_order(update, ctx)
+    assert state1 == ConversationHandler.END
+    assert ctx.user_data["_last_cbq_id"] == "cbq_123"
 
-    # Assert the reply markup was stripped at the beginning
-    update.callback_query.edit_message_reply_markup.assert_called_once_with(
-        reply_markup=None
-    )
+    # Reset the mock to detect if edit_message_text is called again
+    update.callback_query.edit_message_text.reset_mock()
+
+    # Second call with same query.id — should be debounced
+    update.callback_query.id = "cbq_123"
+    state2 = await finalize_order(update, ctx)
+    assert state2 == ConversationHandler.END
+    update.callback_query.edit_message_text.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -439,13 +447,13 @@ async def test_finalize_order_success():
     update = MagicMock()
     update.callback_query = AsyncMock()
     update.callback_query.from_user.id = 123
-    update.effective_chat.send_message = AsyncMock()
+    update.callback_query.edit_message_text = AsyncMock()
 
     state = await finalize_order(update, ctx)
 
     assert state == ConversationHandler.END
-    update.effective_chat.send_message.assert_called_once()
-    call_args = update.effective_chat.send_message.call_args[1]
+    update.callback_query.edit_message_text.assert_called_once()
+    call_args = update.callback_query.edit_message_text.call_args[1]
     assert "Order #1 Confirmed" in call_args["text"]
 
 
@@ -459,13 +467,13 @@ async def test_finalize_order_failure_shows_error():
     update = MagicMock()
     update.callback_query = AsyncMock()
     update.callback_query.from_user.id = 123
-    update.effective_chat.send_message = AsyncMock()
+    update.callback_query.edit_message_text = AsyncMock()
 
     state = await finalize_order(update, ctx)
 
     assert state == ConversationHandler.END
-    update.effective_chat.send_message.assert_called_once()
-    call_args = update.effective_chat.send_message.call_args[1]
+    update.callback_query.edit_message_text.assert_called_once()
+    call_args = update.callback_query.edit_message_text.call_args[1]
     assert "Checkout Failed" in call_args["text"]
     assert "checkout_address" not in ctx.user_data
 
