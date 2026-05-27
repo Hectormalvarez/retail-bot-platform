@@ -59,15 +59,7 @@ def render_product_card(product: dict, cart: dict | None = None) -> tuple[str, l
     if not product:
         return "Product record could not be found.", []
 
-    card_text = (
-        f"📦 *{product['name']}*\n"
-        f"Category: {product['category_name']}\n"
-        f"Price: ${product['price']}\n"
-        f"Stock: {product['stock']} available\n\n"
-        f"_{product['description']}_"
-    )
-
-    # Determine button label based on cart presence
+    # Compute dynamic stock based on active cart selections
     in_cart_qty = 0
     if cart is not None and cart.get("items"):
         for item in cart["items"]:
@@ -75,7 +67,20 @@ def render_product_card(product: dict, cart: dict | None = None) -> tuple[str, l
                 in_cart_qty = item.get("quantity", 0)
                 break
 
-    if in_cart_qty:
+    display_stock = max(0, product["stock"] - in_cart_qty)
+
+    card_text = (
+        f"📦 *{product['name']}*\n"
+        f"Category: {product['category_name']}\n"
+        f"Price: ${product['price']}\n"
+        f"Stock: {display_stock} available\n\n"
+        f"_{product['description']}_"
+    )
+
+    # Determine button label based on cart presence and stock availability
+    if display_stock <= 0:
+        button_text = f"❌ Out of Stock ({in_cart_qty} in Cart)"
+    elif in_cart_qty > 0:
         button_text = f"🛒 Add Another ({in_cart_qty} in Cart)"
     else:
         button_text = "🛒 Add to Cart"

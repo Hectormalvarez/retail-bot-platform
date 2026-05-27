@@ -82,6 +82,7 @@ def test_render_product_card_shows_quantity_when_in_cart():
     text, keyboard = render_product_card(mock_product, cart)
 
     assert "Widget" in text
+    assert "Stock: 2 available" in text
     assert len(keyboard) == 3
     assert keyboard[0][0].text == "🛒 Add Another (3 in Cart)"
     assert keyboard[0][0].callback_data == "add_to_cart_3"

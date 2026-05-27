@@ -44,11 +44,7 @@ def render_orders_history(
     if not orders:
         text_body = "📜 *You don't have any past orders yet.*"
         keyboard = [
-            [
-                InlineKeyboardButton(
-                    "⬅️ Back to Main Menu", callback_data="back_start"
-                )
-            ],
+            [InlineKeyboardButton("⬅️ Back to Main Menu", callback_data="back_start")],
         ]
         return text_body, keyboard
 
@@ -61,8 +57,7 @@ def render_orders_history(
     keyboard: list[list[InlineKeyboardButton]] = [
         [
             InlineKeyboardButton(
-                f"📦 Order #{o['id']} — ${o['total_amount']} "
-                f"({o['status'].title()})",
+                f"📦 Order #{o['id']} — ${o['total_amount']} ({o['status'].title()})",
                 callback_data=f"view_old_order_{o['id']}",
             )
         ]

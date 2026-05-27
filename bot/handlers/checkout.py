@@ -490,7 +490,9 @@ def register_handlers(app) -> None:
         allow_reentry=True,
     )
     app.add_handler(
-        CallbackQueryHandler(view_historical_order_detail_handler, pattern=r"^view_old_order_\d+$")
+        CallbackQueryHandler(
+            view_historical_order_detail_handler, pattern=r"^view_old_order_\d+$"
+        )
     )
     app.add_handler(
         CallbackQueryHandler(view_history_handler, pattern=r"^view_history_nav$")

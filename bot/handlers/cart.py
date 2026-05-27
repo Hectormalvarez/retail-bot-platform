@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes
 
 from context import BotContext
-from handlers.catalog import parse_product_id
+from handlers.catalog import parse_product_id, render_product_card
 from handlers.common import clear_chat_footprint
 
 logger = logging.getLogger(__name__)
@@ -77,16 +78,50 @@ def render_cart_menu(cart: dict) -> tuple[str, list]:
 
 
 async def add_to_cart_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Processes selections to append or increment products in the cart."""
+    """Processes selections to append or increment products in the cart, enforcing inventory bounds."""
     query = update.callback_query
     tg_id = query.from_user.id
 
     product_id = parse_product_id(query.data)
     ctx: BotContext = context.application.bot_data["ctx"]
-    success = await ctx.api.add_product_to_cart(tg_id, product_id)
 
+    # Gather current layout baselines to evaluate limits defensively
+    product, cart = await asyncio.gather(
+        ctx.api.fetch_product_detail(product_id),
+        ctx.api.fetch_user_cart(tg_id),
+    )
+
+    in_cart_qty = 0
+    if cart and cart.get("items"):
+        in_cart_qty = next(
+            (i["quantity"] for i in cart["items"] if i["product"] == product_id), 0
+        )
+
+    if product and in_cart_qty >= product["stock"]:
+        await query.answer(
+            text="⚠️ Cannot add more. Physical stock limit reached!", show_alert=True
+        )
+        return
+
+    success = await ctx.api.add_product_to_cart(tg_id, product_id)
     if success:
         await query.answer(text="🛒 Added to cart!", show_alert=False)
+
+        # Re-fetch fresh metrics to update canvas state
+        fresh_product, fresh_cart = await asyncio.gather(
+            ctx.api.fetch_product_detail(product_id),
+            ctx.api.fetch_user_cart(tg_id),
+        )
+        text, keyboard = render_product_card(fresh_product, fresh_cart)
+
+        try:
+            await query.message.edit_text(
+                text=text,
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+            )
+        except Exception as exc:
+            logger.debug("Idempotent screen redraw skipped: %s", exc)
     else:
         await query.answer(
             text="Could not modify cart. Verify stock bounds.", show_alert=True

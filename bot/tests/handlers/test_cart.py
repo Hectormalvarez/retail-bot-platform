@@ -74,6 +74,7 @@ async def test_add_to_cart_handler_answers_callback():
     mock_update.callback_query.data = "add_to_cart_5"
     mock_update.callback_query.from_user.id = 123
     mock_update.callback_query.answer = AsyncMock()
+    mock_update.callback_query.message.edit_text = AsyncMock()
 
     # Wire up a context with a MockApiClient that has the product
     api = MockApiClient(
@@ -97,6 +98,7 @@ async def test_add_to_cart_handler_answers_callback():
     await add_to_cart_handler(mock_update, ctx)
 
     mock_update.callback_query.answer.assert_called_once()
+    mock_update.callback_query.message.edit_text.assert_called_once()
 
 
 @pytest.mark.asyncio
