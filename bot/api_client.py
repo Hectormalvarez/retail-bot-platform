@@ -265,7 +265,9 @@ class MockApiClient(ApiClient):
             self._config = {
                 "venmo_handle": "@TestVenmo",
                 "zelle_email": "test@zelle.local",
-                "payment_instructions": "Send money to {venmo_handle} or {zelle_email} with note {order_id}",
+                "payment_instructions": (
+                    "Send money to {venmo_handle} or {zelle_email} with note {order_id}"
+                ),
             }
 
     async def fetch_products(self, category_id: int | None = None) -> list[dict]:

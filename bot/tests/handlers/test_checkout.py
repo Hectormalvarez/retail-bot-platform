@@ -1,7 +1,6 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from telegram import InlineKeyboardButton
 from telegram.ext import ConversationHandler
 
 from api_client import MockApiClient
@@ -60,7 +59,9 @@ def test_render_order_receipt():
     config = {
         "venmo_handle": "@TestVenmo",
         "zelle_email": "test@zelle.local",
-        "payment_instructions": "Send money to {venmo_handle} or {zelle_email} with note {order_id}",
+        "payment_instructions": (
+            "Send money to {venmo_handle} or {zelle_email} with note {order_id}"
+        ),
     }
     text, keyboard = render_order_receipt(order_data, "456 Side St", config)
 

@@ -77,7 +77,11 @@ def render_catalog_menu(
         if current_cat_id != 0
         else "All"
     )
-    text = f"📦 *Available Products*\nViewing: {cat_name} | Page {page} of {total_pages}\nSelect an item to view details:"
+    text = (
+        f"📦 *Available Products*\n"
+        f"Viewing: {cat_name} | Page {page} of {total_pages}\n"
+        f"Select an item to view details:"
+    )
 
     keyboard = []
 
@@ -92,7 +96,7 @@ def render_catalog_menu(
         has_more = True
         default_cats = categories[:2]
 
-        # If no category is selected, or the selected one is already in the default 2, show defaults.
+        # Show defaults if no category selected or already in the top 2.
         if current_cat_id == 0 or current_cat_id in [c["id"] for c in default_cats]:
             visible_cats = default_cats
         else:
@@ -235,8 +239,6 @@ async def navigate_catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query and query.data == "back_catalog":
         await query.answer()
     else:
-        from handlers.common import clear_chat_footprint
-
         await clear_chat_footprint(update, context)
 
     ctx: BotContext = context.application.bot_data["ctx"]

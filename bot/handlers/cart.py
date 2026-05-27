@@ -78,7 +78,7 @@ def render_cart_menu(cart: dict) -> tuple[str, list]:
 
 
 async def add_to_cart_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Processes selections to append or increment products in the cart, enforcing inventory bounds."""
+    """Appends or increments products in the cart, enforcing inventory bounds."""
     query = update.callback_query
     tg_id = query.from_user.id
 
