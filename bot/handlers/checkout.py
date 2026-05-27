@@ -105,14 +105,20 @@ def render_order_receipt(
 
     receipt_lines.append(f"\n*Total Paid*: ${order_data['total_amount']}")
 
-    # Dynamic payment instructions from config
-    payment_text = config.get("payment_instructions", "").format(
-        venmo_handle=config.get("venmo_handle", ""),
-        zelle_email=config.get("zelle_email", ""),
-        order_id=order_data["id"],
-    )
-    if payment_text:
-        receipt_lines.extend(["", payment_text])
+    # Status-aware payment section
+    status = order_data.get("status", "PENDING")
+    if status == "PENDING":
+        # Show dynamic payment instructions for unpaid orders
+        payment_text = config.get("payment_instructions", "").format(
+            venmo_handle=config.get("venmo_handle", ""),
+            zelle_email=config.get("zelle_email", ""),
+            order_id=order_data["id"],
+        )
+        if payment_text:
+            receipt_lines.extend(["", payment_text])
+    elif status in ("COMPLETED", "SHIPPED"):
+        # Show Payment Received badge for paid/shipped orders
+        receipt_lines.extend(["", "✅ *Payment Received*"])
 
     text_body = "\n".join(receipt_lines)
 

@@ -48,13 +48,14 @@ def test_render_order_confirmation():
 
 
 def test_render_order_receipt():
-    """Verifies the completed order receipt text after checkout."""
+    """Verifies the PENDING order receipt text shows payment instructions."""
     order_data = {
         "id": 42,
         "items": [
             {"product_name": "T-Shirt", "quantity": 1, "price_at_purchase": "25.00"}
         ],
         "total_amount": "25.00",
+        "status": "PENDING",
     }
     config = {
         "venmo_handle": "@TestVenmo",
@@ -115,6 +116,42 @@ def test_build_address_keyboard():
     assert keyboard[1][0].callback_data == "pick_addr_2"
     assert keyboard[2][0].callback_data == "new_address"
     assert keyboard[3][0].callback_data == "cancel_checkout"
+
+
+def test_render_order_receipt_completed_hides_payment():
+    """Verifies COMPLETED order receipt hides payment instructions and shows Payment Received badge."""
+    order_data = {
+        "id": 42,
+        "items": [
+            {"product_name": "T-Shirt", "quantity": 1, "price_at_purchase": "25.00"}
+        ],
+        "total_amount": "25.00",
+        "status": "COMPLETED",
+    }
+    config = {
+        "venmo_handle": "@TestVenmo",
+        "zelle_email": "test@zelle.local",
+        "payment_instructions": (
+            "Send money to {venmo_handle} or {zelle_email} with note {order_id}"
+        ),
+    }
+    text, keyboard = render_order_receipt(order_data, "456 Side St", config)
+
+    assert "Order #42 Confirmed" in text
+    assert "456 Side St" in text
+    assert "T-Shirt" in text
+    assert "25.00" in text
+    # Payment Received badge should be shown
+    assert "✅ *Payment Received*" in text
+    # Payment instructions should NOT be present
+    assert "@TestVenmo" not in text
+    assert "test@zelle.local" not in text
+    assert "note 42" not in text
+    assert "Send money" not in text
+    # Keyboard has one back button
+    assert len(keyboard) == 1
+    assert keyboard[0][0].callback_data == "back_start"
+    assert keyboard[0][0].text == "🏠 Return to Main Menu"
 
 
 def test_render_order_receipt_dict_address():
