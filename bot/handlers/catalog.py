@@ -25,9 +25,49 @@ def parse_product_id(callback_data: str) -> int:
 
 
 def render_catalog_menu(
-    products: list, categories: list, page: int = 1, current_cat_id: int = 0
+    products: list,
+    categories: list,
+    page: int = 1,
+    current_cat_id: int = 0,
+    show_cats: bool = False,
 ) -> tuple[str, list]:
     """Generates the text body and inline keyboard markup for the catalog."""
+    if show_cats:
+        text = "🗂 *Select a Category:*"
+        keyboard = []
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    "🟢 All" if current_cat_id == 0 else "All",
+                    callback_data="nav_cat_0_p_1",
+                )
+            ]
+        )
+
+        # Chunk categories into rows of 2
+        row = []
+        for cat in categories:
+            prefix = "🟢 " if current_cat_id == cat["id"] else ""
+            row.append(
+                InlineKeyboardButton(
+                    f"{prefix}{cat['name']}", callback_data=f"nav_cat_{cat['id']}_p_1"
+                )
+            )
+            if len(row) == 2:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    "⬅️ Back to Catalog", callback_data=f"nav_cat_{current_cat_id}_p_1"
+                )
+            ]
+        )
+        return text, keyboard
+
     items_per_page = 5
     total_pages = max(1, math.ceil(len(products) / items_per_page))
     page = max(1, min(page, total_pages))  # clamp
@@ -41,19 +81,33 @@ def render_catalog_menu(
 
     keyboard = []
 
-    # Category Filter Row (All + top 3 categories)
+    # Category Filter Row (All + top 2 + More)
     cat_buttons = [
         InlineKeyboardButton(
             "🟢 All" if current_cat_id == 0 else "All", callback_data="nav_cat_0_p_1"
         )
     ]
-    for cat in categories[:3]:
+
+    if len(categories) > 3:
+        visible_cats = categories[:2]
+        has_more = True
+    else:
+        visible_cats = categories
+        has_more = False
+
+    for cat in visible_cats:
         prefix = "🟢 " if current_cat_id == cat["id"] else ""
         cat_buttons.append(
             InlineKeyboardButton(
                 f"{prefix}{cat['name']}", callback_data=f"nav_cat_{cat['id']}_p_1"
             )
         )
+
+    if has_more:
+        cat_buttons.append(
+            InlineKeyboardButton("More 🔽", callback_data=f"more_cats_{current_cat_id}")
+        )
+
     if cat_buttons:
         keyboard.append(cat_buttons)
 
@@ -154,11 +208,16 @@ async def navigate_catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     cat_id = 0
     page = 1
+    show_cats = False
 
     if query and query.data.startswith("nav_cat_"):
         parts = query.data.split("_")
         cat_id = int(parts[2])
         page = int(parts[4])
+        await query.answer()
+    elif query and query.data.startswith("more_cats_"):
+        cat_id = int(query.data.split("_")[2])
+        show_cats = True
         await query.answer()
     elif query and query.data == "back_catalog":
         await query.answer()
@@ -174,7 +233,7 @@ async def navigate_catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ctx.api.fetch_products(category_id=api_cat_id), ctx.api.fetch_categories()
     )
 
-    text, keyboard = render_catalog_menu(products, categories, page, cat_id)
+    text, keyboard = render_catalog_menu(products, categories, page, cat_id, show_cats)
     markup = InlineKeyboardMarkup(keyboard) if keyboard else None
 
     if query:
@@ -232,6 +291,7 @@ def register_handlers(app) -> None:
         CallbackQueryHandler(navigate_catalog, pattern=r"^nav_cat_\d+_p_\d+$")
     )
     app.add_handler(CallbackQueryHandler(navigate_catalog, pattern=r"^back_catalog$"))
+    app.add_handler(CallbackQueryHandler(navigate_catalog, pattern=r"^more_cats_\d+$"))
     app.add_handler(
         CallbackQueryHandler(view_product_detail, pattern=r"^view_prod_\d+$")
     )

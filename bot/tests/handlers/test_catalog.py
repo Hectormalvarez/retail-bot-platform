@@ -70,11 +70,12 @@ def test_render_catalog_menu_page_2():
 
 
 def test_render_catalog_menu_with_categories():
-    """Verifies the category filter ribbon renders correctly."""
+    """Verifies the category filter ribbon caps at 4 buttons with 'More'."""
     mock_categories = [
         {"id": 1, "name": "Gear"},
         {"id": 2, "name": "Apparel"},
         {"id": 3, "name": "Books"},
+        {"id": 4, "name": "Electronics"},
     ]
     mock_products = [{"id": 1, "name": "T-Shirt", "price": "25.00"}]
     text, keyboard = render_catalog_menu(
@@ -83,14 +84,48 @@ def test_render_catalog_menu_with_categories():
 
     assert "Viewing: Gear" in text
     assert "Page 1 of 1" in text
-    # Category row: All + 3 categories
+    # Category row: All + 2 visible categories + More = 4 buttons
     assert len(keyboard[0]) == 4
     assert keyboard[0][0].text == "All"  # not selected
     assert keyboard[0][0].callback_data == "nav_cat_0_p_1"
     assert keyboard[0][1].text == "🟢 Gear"  # selected
     assert keyboard[0][1].callback_data == "nav_cat_1_p_1"
     assert keyboard[0][2].text == "Apparel"
-    assert keyboard[0][3].text == "Books"
+    assert keyboard[0][2].callback_data == "nav_cat_2_p_1"
+    assert keyboard[0][3].text == "More 🔽"
+    assert keyboard[0][3].callback_data == "more_cats_1"
+
+
+def test_render_catalog_menu_show_cats_grid():
+    """Verifies the show_cats grid renders categories in rows of 2."""
+    mock_categories = [
+        {"id": 1, "name": "Gear"},
+        {"id": 2, "name": "Apparel"},
+        {"id": 3, "name": "Books"},
+        {"id": 4, "name": "Electronics"},
+    ]
+    mock_products = [{"id": 1, "name": "T-Shirt", "price": "25.00"}]
+    text, keyboard = render_catalog_menu(
+        mock_products, mock_categories, page=1, current_cat_id=2, show_cats=True
+    )
+
+    assert text == "🗂 *Select a Category:*"
+    # Row 0: All button (selected since current_cat_id=0 is All)
+    assert keyboard[0][0].text == "All"
+    assert keyboard[0][0].callback_data == "nav_cat_0_p_1"
+    # Rows 1-2: categories chunked into rows of 2
+    assert len(keyboard[1]) == 2  # Gear, Apparel
+    assert keyboard[1][0].text == "Gear"
+    assert keyboard[1][0].callback_data == "nav_cat_1_p_1"
+    assert keyboard[1][1].text == "🟢 Apparel"  # selected
+    assert keyboard[1][1].callback_data == "nav_cat_2_p_1"
+    assert len(keyboard[2]) == 2  # Books, Electronics
+    assert keyboard[2][0].text == "Books"
+    assert keyboard[2][1].text == "Electronics"
+    # Final row: Back to Catalog
+    assert len(keyboard[3]) == 1
+    assert keyboard[3][0].text == "⬅️ Back to Catalog"
+    assert keyboard[3][0].callback_data == "nav_cat_2_p_1"
 
 
 def test_render_catalog_menu_empty_products_with_categories():
