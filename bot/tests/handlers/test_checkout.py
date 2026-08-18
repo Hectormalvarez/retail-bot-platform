@@ -121,7 +121,7 @@ def test_build_address_keyboard():
 
 
 def test_render_order_receipt_completed_hides_payment():
-    """Verifies COMPLETED order receipt hides payment instructions and shows Payment Received badge."""
+    """Verifies COMPLETED order receipt hides payment instructions."""
     order_data = {
         "id": 42,
         "items": [
@@ -196,7 +196,7 @@ def _make_context(api=None):
 
 @pytest.mark.asyncio
 async def test_view_history_handler_with_no_orders():
-    """view_history_handler shows 'no past orders' with Browse Catalog + Back buttons."""
+    """Shows 'no past orders' with Browse Catalog + Back buttons."""
     api = MockApiClient()
     ctx = _make_context(api)
 
@@ -223,7 +223,7 @@ async def test_view_history_handler_with_no_orders():
 
 @pytest.mark.asyncio
 async def test_view_history_handler_with_orders():
-    """view_history_handler fetches orders and renders history with emojis and pagination."""
+    """Fetches orders and renders history with emojis and pagination."""
     api = MockApiClient(
         product_details={1: {"id": 1, "name": "Widget", "price": "9.99"}}
     )
@@ -251,7 +251,7 @@ async def test_view_history_handler_with_orders():
     reply_markup = call_args["reply_markup"]
     assert reply_markup is not None
 
-    # The inline keyboard should have 4 rows: 2 orders + 1 pagination row (both prev/next disabled for single page) + 1 back button
+    # 4 rows: 2 orders + 1 pagination (prev/next disabled) + 1 back
     assert len(reply_markup.inline_keyboard) == 4
     # Order rows include status emoji
     assert "🟡" in reply_markup.inline_keyboard[0][0].text
@@ -562,7 +562,7 @@ async def test_cancel_command_fallback_sends_message():
 
 
 def test_render_orders_history_empty():
-    """render_orders_history returns no-orders text with Browse Catalog + Back buttons."""
+    """Returns no-orders text with Browse Catalog + Back buttons."""
     text, keyboard = render_orders_history([])
     assert "don't have any past orders yet" in text
     assert len(keyboard) == 2
@@ -580,7 +580,9 @@ def test_render_orders_history_multiple_statuses():
     ]
     text, keyboard = render_orders_history(orders)
     assert "Your Purchase History" in text
-    assert len(keyboard) == 5  # 3 orders + pagination row (1 page, no prev/next) + back button
+    assert (
+        len(keyboard) == 5
+    )  # 3 orders + pagination row (1 page, no prev/next) + back button
 
     # Order rows with emojis
     assert "🟡" in keyboard[0][0].text
@@ -703,8 +705,10 @@ async def test_timeout_checkout_sends_message_and_cleans_state():
 
     assert result is ConversationHandler.END
     update.effective_chat.send_message.assert_called_once()
-    call_kwargs = update.effective_chat.send_message.call_args[1]
-    assert "expired" in call_kwargs["text"].lower()
+    # send_message(text=..., parse_mode=...) — text is positional
+    call_args = update.effective_chat.send_message.call_args
+    text = call_args[0][0] if call_args[0] else call_args[1].get("text", "")
+    assert "expired" in text.lower()
     assert "checkout_address" not in context.user_data
     assert "active_menu_id" not in context.user_data
 
