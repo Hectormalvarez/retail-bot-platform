@@ -2,8 +2,10 @@ from django.db import transaction
 from rest_framework import status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
 from .cart_service import CartService
 from .models import Address, Cart, CartItem, Category, Order, Product, TelegramUser
+from .repositories import DjangoConfigRepo
 from .serializers import (
     AddressSerializer,
     CartItemSerializer,
@@ -13,7 +15,6 @@ from .serializers import (
     ProductSerializer,
     TelegramUserSerializer,
 )
-from .repositories import DjangoConfigRepo
 from .services import OrderService
 
 
@@ -156,6 +157,12 @@ class OrderViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         user_id = request.data.get("user")
         shipping_address = request.data.get("shipping_address")
+
+        if not shipping_address:
+            return Response(
+                {"error": "shipping_address is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         with transaction.atomic():
             order, error = self._order_service.create_order(user_id, shipping_address)

@@ -19,9 +19,12 @@ logger = logging.getLogger(__name__)
 # ---- pure helpers (no DI) -----------------------------------------------
 
 
-def parse_product_id(callback_data: str) -> int:
+def parse_product_id(callback_data: str) -> int | None:
     """Extracts the integer product database ID from a callback query string."""
-    return int(callback_data.split("_")[-1])
+    try:
+        return int(callback_data.split("_")[-1])
+    except (IndexError, ValueError):
+        return None
 
 
 def render_catalog_menu(

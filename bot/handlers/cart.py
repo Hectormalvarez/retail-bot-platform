@@ -18,10 +18,13 @@ logger = logging.getLogger(__name__)
 # ---- pure helpers (no DI) -----------------------------------------------
 
 
-def parse_quantity_action(callback_data: str) -> tuple[str, int, int]:
+def parse_quantity_action(callback_data: str) -> tuple[str, int, int] | None:
     """Parses action, item ID, and quantity from a callback string."""
-    parts = callback_data.split("_")
-    return parts[1], int(parts[2]), int(parts[3])
+    try:
+        parts = callback_data.split("_")
+        return parts[1], int(parts[2]), int(parts[3])
+    except (IndexError, ValueError):
+        return None
 
 
 def render_cart_menu(cart: dict) -> tuple[str, list]:
@@ -83,6 +86,9 @@ async def add_to_cart_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     tg_id = query.from_user.id
 
     product_id = parse_product_id(query.data)
+    if product_id is None:
+        await query.answer(text="Invalid product reference.", show_alert=True)
+        return
     ctx: BotContext = context.application.bot_data["ctx"]
 
     # Gather current layout baselines to evaluate limits defensively
@@ -157,7 +163,10 @@ async def adjust_quantity_handler(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     await query.answer()
 
-    action, item_id, current_qty = parse_quantity_action(query.data)
+    parsed = parse_quantity_action(query.data)
+    if parsed is None:
+        return
+    action, item_id, current_qty = parsed
     new_qty = current_qty + 1 if action == "up" else current_qty - 1
 
     ctx: BotContext = context.application.bot_data["ctx"]
