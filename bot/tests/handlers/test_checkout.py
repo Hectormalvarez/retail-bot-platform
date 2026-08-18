@@ -13,6 +13,7 @@ from handlers.checkout import (
     cancel_checkout,
     cancel_command_fallback,
     capture_address,
+    cleanup_checkout_state,
     compute_address_label,
     finalize_order,
     pick_saved_address,
@@ -22,6 +23,7 @@ from handlers.checkout import (
     save_address_and_confirm,
     skip_save_confirm,
     start_checkout,
+    timeout_checkout,
     view_historical_order_detail_handler,
     view_history_handler,
 )
@@ -652,3 +654,82 @@ async def test_view_historical_order_detail_handler_not_found():
     # Text is passed as positional arg — check call_args[0]
     call_args = update.callback_query.edit_message_text.call_args
     assert "Order not found" in call_args[0][0]
+
+
+# ---- conversation timeout & state cleanup tests ---------------------------
+
+
+def test_cleanup_checkout_state_removes_all_keys():
+    """cleanup_checkout_state removes all checkout-related keys from user_data."""
+    context = MagicMock()
+    context.user_data = {
+        "checkout_address": "123 Main St",
+        "address_was_saved": True,
+        "saved_addresses": [{"id": 1, "label": "Home"}],
+        "active_menu_id": 999,
+        "unrelated_key": "should remain",
+    }
+
+    cleanup_checkout_state(context)
+
+    assert "checkout_address" not in context.user_data
+    assert "address_was_saved" not in context.user_data
+    assert "saved_addresses" not in context.user_data
+    assert "active_menu_id" not in context.user_data
+    assert context.user_data == {"unrelated_key": "should remain"}
+
+
+def test_cleanup_checkout_state_noop_when_empty():
+    """cleanup_checkout_state is safe to call on empty user_data."""
+    context = MagicMock()
+    context.user_data = {}
+    cleanup_checkout_state(context)
+    assert context.user_data == {}
+
+
+@pytest.mark.asyncio
+async def test_timeout_checkout_sends_message_and_cleans_state():
+    """timeout_checkout notifies the user and returns END."""
+    context = MagicMock()
+    context.user_data = {
+        "checkout_address": "stale addr",
+        "active_menu_id": 100,
+    }
+
+    update = MagicMock()
+    update.effective_chat.send_message = AsyncMock()
+
+    result = await timeout_checkout(update, context)
+
+    assert result is ConversationHandler.END
+    update.effective_chat.send_message.assert_called_once()
+    call_kwargs = update.effective_chat.send_message.call_args[1]
+    assert "expired" in call_kwargs["text"].lower()
+    assert "checkout_address" not in context.user_data
+    assert "active_menu_id" not in context.user_data
+
+
+@pytest.mark.asyncio
+async def test_cancel_checkout_cleans_state():
+    """cancel_checkout cleans up checkout state before returning END."""
+    api = MockApiClient(
+        product_details={1: {"id": 1, "name": "Widget", "price": "9.99"}}
+    )
+    await api.add_product_to_cart(123, 1)
+    ctx = _make_context(api)
+
+    ctx.user_data["checkout_address"] = "stale addr"
+    ctx.user_data["saved_addresses"] = []
+    ctx.user_data["active_menu_id"] = 200
+
+    update = MagicMock()
+    update.callback_query = AsyncMock()
+    update.callback_query.from_user.id = 123
+    update.callback_query.message.edit_text = AsyncMock()
+
+    result = await cancel_checkout(update, ctx)
+
+    assert result is ConversationHandler.END
+    assert "checkout_address" not in ctx.user_data
+    assert "saved_addresses" not in ctx.user_data
+    assert "active_menu_id" not in ctx.user_data
