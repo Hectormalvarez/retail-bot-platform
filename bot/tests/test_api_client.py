@@ -99,6 +99,23 @@ class TestMockApiClient:
         assert cart["items"] == []
 
     @pytest.mark.asyncio
+    async def test_submit_order_stores_unit_price_not_subtotal(self, client):
+        """Verify price_at_purchase is the unit price, not quantity * unit_price."""
+        # T-Shirt price is 25.00; add 3 to cart via incremental adds
+        await client.add_product_to_cart(123, 1)
+        await client.add_product_to_cart(123, 1)
+        await client.add_product_to_cart(123, 1)
+
+        order = await client.submit_order(123, "123 Main St")
+        assert order is not None
+        assert len(order["items"]) == 1
+
+        item = order["items"][0]
+        assert item["quantity"] == 3
+        # price_at_purchase must be the unit price (25.00), NOT the subtotal (75.00)
+        assert item["price_at_purchase"] == "25.00"
+
+    @pytest.mark.asyncio
     async def test_submit_order_empty_cart_returns_none(self, client):
         order = await client.submit_order(123, "addr")
         assert order is None
