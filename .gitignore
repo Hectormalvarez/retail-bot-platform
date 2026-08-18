@@ -2,11 +2,13 @@
 .env
 venv/
 env/
+.venv/
 
 # Python Runtime
 __pycache__/
 *.py[cod]
 *.egg-info/
+*.sqlite3
 
 # Testing & Linting
 .pytest_cache/
