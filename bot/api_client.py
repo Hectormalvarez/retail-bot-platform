@@ -350,7 +350,9 @@ class MockApiClient(ApiClient):
                 {
                     "product_name": i["product_name"],
                     "quantity": i["quantity"],
-                    "price_at_purchase": i["subtotal"],
+                    "price_at_purchase": self.product_details.get(
+                        i["product"], {}
+                    ).get("price", "0.00"),
                 }
                 for i in cart["items"]
             ],
