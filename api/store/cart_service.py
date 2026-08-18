@@ -41,9 +41,7 @@ class CartService:
 
         existing = self.carts.find_item(cart, product_id)
         if existing is not None:
-            # Increment by the requested quantity
-            for _ in range(quantity):
-                self.carts.increment_item(existing)
+            self.carts.increment_item_by(existing, quantity)
             return existing
 
         try:
@@ -54,7 +52,10 @@ class CartService:
         return self.carts.add_item(cart, product, quantity=quantity)
 
     def update_quantity(self, item_id: int, new_qty: int) -> CartItem | None:
-        """Update cart-item quantity. Returns None if the item was deleted (qty <= 0)."""
+        """Update cart-item quantity.
+
+        Returns None if the item was deleted (qty <= 0).
+        """
         try:
             item = self.carts.get_item(item_id)
         except Exception:

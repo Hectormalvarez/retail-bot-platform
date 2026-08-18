@@ -4,7 +4,16 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from .models import Address, Cart, CartItem, Order, OrderItem, Product, StoreConfig, TelegramUser
+from .models import (
+    Address,
+    Cart,
+    CartItem,
+    Order,
+    OrderItem,
+    Product,
+    StoreConfig,
+    TelegramUser,
+)
 
 
 class DjangoCartRepo:
@@ -31,6 +40,11 @@ class DjangoCartRepo:
 
     def increment_item(self, item: CartItem) -> None:
         item.quantity += 1
+        item.save(update_fields=["quantity"])
+
+    def increment_item_by(self, item: CartItem, quantity: int) -> None:
+        """Add *quantity* to the existing item in a single DB write."""
+        item.quantity += quantity
         item.save(update_fields=["quantity"])
 
     def add_item(self, cart: Cart, product: Product, quantity: int = 1) -> CartItem:

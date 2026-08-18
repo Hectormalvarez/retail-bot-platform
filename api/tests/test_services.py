@@ -264,7 +264,7 @@ def test_cart_add_new_item():
 
 
 def test_cart_add_existing_item_increments():
-    """Adding a product already in cart -> increment_item called, no new item."""
+    """Adding a product already in cart -> increment_item_by called, no new item."""
     mock_user = MagicMock()
     mock_cart = MagicMock()
     mock_existing = MagicMock()
@@ -279,7 +279,7 @@ def test_cart_add_existing_item_increments():
     result = service.add_or_increment(1, 42)
 
     assert result is mock_existing
-    cart_repo.increment_item.assert_called_once_with(mock_existing)
+    cart_repo.increment_item_by.assert_called_once_with(mock_existing, 1)
     cart_repo.add_item.assert_not_called()
 
 
