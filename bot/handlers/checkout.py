@@ -435,10 +435,36 @@ async def finalize_order(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     except Exception as exc:
         logger.debug("Receipt screen redraw skipped: %s", exc)
 
-    context.user_data.pop("checkout_address", None)
-    context.user_data.pop("address_was_saved", None)
-    context.user_data.pop("saved_addresses", None)
-    context.user_data.pop("active_menu_id", None)
+    cleanup_checkout_state(context)
+    return ConversationHandler.END
+
+
+def cleanup_checkout_state(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Remove all checkout-related keys from user_data.
+
+    Called by every conversation exit path (timeout, cancel, /cancel command,
+    and successful finalization) so stale state never leaks into a fresh
+    checkout attempt.
+    """
+    for key in (
+        "checkout_address",
+        "address_was_saved",
+        "saved_addresses",
+        "active_menu_id",
+    ):
+        context.user_data.pop(key, None)
+
+
+async def timeout_checkout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle ConversationHandler timeout — notify the user and clean up."""
+    cleanup_checkout_state(context)
+
+    if update.effective_chat is not None:
+        await update.effective_chat.send_message(
+            "⏰ *Checkout session expired.*\n"
+            "Your cart is still saved — use /cart to continue shopping.",
+            parse_mode="Markdown",
+        )
     return ConversationHandler.END
 
 
@@ -452,6 +478,7 @@ async def cancel_checkout(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await query.message.edit_text(
         text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard)
     )
+    cleanup_checkout_state(context)
     return ConversationHandler.END
 
 
@@ -459,6 +486,7 @@ async def cancel_command_fallback(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> int:
     await clear_chat_footprint(update, context)
+    cleanup_checkout_state(context)
 
     text = "❌ Checkout wizard dropped. Returning to main menu dashboard."
     keyboard = [[InlineKeyboardButton("🏠 Main Menu", callback_data="back_start")]]
@@ -508,6 +536,8 @@ def register_handlers(app) -> None:
         },
         fallbacks=[CommandHandler("cancel", cancel_command_fallback)],
         allow_reentry=True,
+        conversation_timeout=600,  # 10 minutes
+        timeout_callback=timeout_checkout,
     )
     app.add_handler(
         CallbackQueryHandler(
@@ -518,8 +548,6 @@ def register_handlers(app) -> None:
         CallbackQueryHandler(view_history_handler, pattern=r"^view_history_nav$")
     )
     app.add_handler(
-        CallbackQueryHandler(
-            view_history_handler, pattern=r"^view_history_p_\d+$"
-        )
+        CallbackQueryHandler(view_history_handler, pattern=r"^view_history_p_\d+$")
     )
     app.add_handler(checkout_conv)
