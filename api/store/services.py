@@ -52,11 +52,13 @@ class OrderService:
             return None, "Shopping cart is empty"
 
         total_amount: Decimal = Decimal("0.00")
+        locked_products: dict[int, object] = {}
         for item in cart_items:
             product = self.products.get_for_update(item.product.id)
             if product.stock < item.quantity:
                 return None, f"Insufficient stock available for {product.name}"
             total_amount += product.price * item.quantity
+            locked_products[item.product.id] = product
 
         order = self.orders.create(
             user=user,
@@ -65,7 +67,7 @@ class OrderService:
         )
 
         for item in cart_items:
-            product = self.products.get_by_id(item.product.id)
+            product = locked_products[item.product.id]
             self.products.decrement_stock(product, item.quantity)
             self.orders.create_item(
                 order=order,

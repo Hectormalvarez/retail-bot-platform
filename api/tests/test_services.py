@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from unittest.mock import Mock, MagicMock
+from unittest.mock import MagicMock, Mock
 
 from store.cart_service import CartService
 from store.repositories import (
@@ -13,7 +13,6 @@ from store.repositories import (
     DjangoUserRepo,
 )
 from store.services import OrderService
-
 
 # ---------------------------------------------------------------------------
 # OrderService tests
@@ -206,6 +205,9 @@ def test_create_order_reuses_locked_products_no_double_fetch():
     # get_by_id must NEVER be called — the locked product is reused
     product_repo.get_by_id.assert_not_called()
     product_repo.decrement_stock.assert_called_once_with(mock_product, 2)
+
+
+def test_create_order_calculates_total_correctly():
     """Multiple items with different prices -> total is sum of price * quantity."""
     mock_user = MagicMock()
     mock_cart = MagicMock()
@@ -242,7 +244,6 @@ def test_create_order_reuses_locked_products_no_double_fetch():
         return prod1 if pid == 1 else prod2
 
     product_repo.get_for_update.side_effect = _get_for_update
-    product_repo.get_by_id.side_effect = _get_for_update
     order_repo = Mock(spec=DjangoOrderRepo)
     order_repo.create.return_value = mock_order
 
@@ -280,7 +281,7 @@ def _make_cart_service(mocks: dict | None = None) -> CartService:
 
 
 def test_cart_add_new_item():
-    """Adding a product not already in cart -> cart_repo.add_item called with quantity=1."""
+    """New product -> add_item called with quantity=1."""
     mock_user = MagicMock()
     mock_cart = MagicMock()
 
