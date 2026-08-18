@@ -1,5 +1,7 @@
 import factory
+
 from store.models import (
+    Address,
     Cart,
     CartItem,
     Category,
@@ -32,7 +34,7 @@ class ProductFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = Product
 
-    # SubFactory automatically builds and attaches a Category if we don't explicitly provide one
+    # SubFactory auto-attaches a Category if none provided
     category = factory.SubFactory(CategoryFactory)
     name = factory.Faker("word")
     description = factory.Faker("sentence")
@@ -72,3 +74,12 @@ class OrderItemFactory(factory.django.DjangoModelFactory):
     product = factory.SubFactory(ProductFactory)
     quantity = 1
     price_at_purchase = "15.00"
+
+
+class AddressFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Address
+
+    user = factory.SubFactory(TelegramUserFactory)
+    label = factory.Sequence(lambda n: f"Address {n}")
+    full_address = factory.Faker("address")

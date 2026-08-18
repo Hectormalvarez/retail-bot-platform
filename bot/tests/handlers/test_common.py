@@ -64,7 +64,7 @@ async def test_clear_chat_footprint_handles_delete_exception():
 
 
 def test_render_orders_history_no_orders():
-    """An empty orders list returns the 'no orders' message with Browse Catalog and Back buttons."""
+    """Empty orders list returns 'no orders' with Browse Catalog + Back."""
     text, keyboard = render_orders_history([])
 
     assert "don't have any past orders yet" in text
@@ -75,7 +75,7 @@ def test_render_orders_history_no_orders():
 
 
 def test_render_orders_history_with_two_orders():
-    """A list of 2 orders produces 4 keyboard rows (2 orders + 1 empty pagination row + 1 back button) with status emojis."""
+    """Two orders produce 4 keyboard rows with status emojis."""
     orders = [
         {"id": 101, "total_amount": "49.99", "status": "PENDING"},
         {"id": 202, "total_amount": "125.00", "status": "COMPLETED"},
@@ -112,7 +112,7 @@ def test_render_orders_history_with_two_orders():
 
 
 def test_render_orders_history_pagination():
-    """With 10 orders, page 1 shows 5 orders + Next button, page 2 shows 5 orders + Prev button."""
+    """10 orders: page 1 shows 5 + Next, page 2 shows 5 + Prev."""
     orders = [
         {"id": i, "total_amount": f"{i * 10}.00", "status": "PENDING"}
         for i in range(1, 11)
@@ -232,6 +232,58 @@ def test_render_welcome_dashboard_with_shipped_order():
     assert keyboard[0][0].text == "📦 Browse Catalog"
     assert keyboard[1][0].text == "📜 Order History"
     assert keyboard[1][0].callback_data == "view_history_nav"
+
+
+def test_render_welcome_dashboard_with_cart_and_order():
+    """Scenario 4: A user with both an active cart and a recent order."""
+    sample_cart = {
+        "items": [{"product_name": "Widget", "quantity": 2}],
+        "cart_total": "50.00",
+    }
+    sample_order = {
+        "id": 99,
+        "status": "COMPLETED",
+    }
+
+    text, keyboard = render_welcome_dashboard(
+        user_name="Diana",
+        cart=sample_cart,
+        latest_order=sample_order,
+    )
+
+    assert "Welcome back, Diana!" in text
+    assert "Active Cart" in text
+    assert "2 items" in text
+    assert "50.00" in text
+    assert "Order #99" in text
+    assert "[Completed/Paid]" in text
+
+    # Keyboard: Browse Catalog + View Active Cart + Order History
+    assert len(keyboard) == 3
+    assert keyboard[0][0].text == "📦 Browse Catalog"
+    assert keyboard[1][0].text == "🛍️ View Active Cart"
+    assert keyboard[1][0].callback_data == "view_cart_nav"
+    assert keyboard[2][0].text == "📜 Order History"
+    assert keyboard[2][0].callback_data == "view_history_nav"
+
+
+def test_extract_user_context_from_private_chat():
+    """extract_user_context returns a clean dict of Telegram user fields."""
+    from handlers.common import extract_user_context
+
+    update = MagicMock()
+    update.effective_user.id = 42
+    update.effective_user.username = "alice"
+    update.effective_user.first_name = "Alice"
+    update.effective_user.last_name = "Smith"
+
+    result = extract_user_context(update)
+    assert result == {
+        "telegram_id": 42,
+        "username": "alice",
+        "first_name": "Alice",
+        "last_name": "Smith",
+    }
 
 
 # ---- start / back_to_start (stateful — need app.bot_data["ctx"]) --------
