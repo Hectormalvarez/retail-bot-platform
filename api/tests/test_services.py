@@ -160,7 +160,52 @@ def test_create_order_happy_path_creates_order_with_items():
     cart_repo.delete_items.assert_called_once_with(mock_cart)
 
 
-def test_create_order_calculates_total_correctly():
+def test_create_order_reuses_locked_products_no_double_fetch():
+    """OrderService must not re-fetch products after the stock validation loop.
+
+    The validation loop uses ``get_for_update`` (row lock). A second call to
+    ``get_by_id`` (unlocked) would release the lock and allow concurrent
+    orders to over-decrement stock.
+    """
+    mock_user = MagicMock()
+    mock_cart = MagicMock()
+    mock_item = MagicMock()
+    mock_item.product.id = 1
+    mock_item.quantity = 2
+    mock_item.product.price = Decimal("15.00")
+
+    mock_product = MagicMock()
+    mock_product.stock = 10
+    mock_product.price = Decimal("15.00")
+
+    mock_order = MagicMock()
+
+    user_repo = Mock(spec=DjangoUserRepo)
+    user_repo.get_by_telegram.return_value = mock_user
+    cart_repo = Mock(spec=DjangoCartRepo)
+    cart_repo.get_by_user.return_value = mock_cart
+    cart_repo.get_items.return_value = [mock_item]
+    product_repo = Mock(spec=DjangoProductRepo)
+    product_repo.get_for_update.return_value = mock_product
+    order_repo = Mock(spec=DjangoOrderRepo)
+    order_repo.create.return_value = mock_order
+
+    service = _make_service(
+        {
+            "user_repo": user_repo,
+            "cart_repo": cart_repo,
+            "product_repo": product_repo,
+            "order_repo": order_repo,
+        }
+    )
+    order, error = service.create_order(1, "addr")
+
+    assert error is None
+    # get_for_update called once per cart item (validation + lock)
+    product_repo.get_for_update.assert_called_once_with(1)
+    # get_by_id must NEVER be called — the locked product is reused
+    product_repo.get_by_id.assert_not_called()
+    product_repo.decrement_stock.assert_called_once_with(mock_product, 2)
     """Multiple items with different prices -> total is sum of price * quantity."""
     mock_user = MagicMock()
     mock_cart = MagicMock()
