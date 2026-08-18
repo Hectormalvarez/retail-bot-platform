@@ -64,6 +64,18 @@ def test_parse_quantity_action_up():
     assert quantity == 2
 
 
+def test_parse_quantity_action_malformed_returns_none():
+    """Malformed callback data returns None instead of crashing."""
+    result = parse_quantity_action("bad_data")
+    assert result is None
+
+
+def test_parse_quantity_action_too_short_returns_none():
+    """Callback data with too few segments returns None instead of IndexError."""
+    result = parse_quantity_action("qty_up")
+    assert result is None
+
+
 # ---- handlers that need app.bot_data["ctx"] ------------------------------
 
 

@@ -1,4 +1,5 @@
 import pytest
+
 from store.models import CartItem
 from store.services import OrderService
 
@@ -70,6 +71,20 @@ def test_checkout_missing_fields_returns_400(api_client):
 
 
 @pytest.mark.django_db
+def test_checkout_null_shipping_address_returns_400(
+    api_client, test_user, test_cart, test_product
+):
+    """POST /api/orders/ with null shipping_address returns 400."""
+    from store.models import CartItem
+
+    CartItem.objects.create(cart=test_cart, product=test_product, quantity=1)
+    payload = {"user": test_user.telegram_id, "shipping_address": None}
+    res = api_client.post("/api/orders/", payload, format="json")
+    assert res.status_code == 400
+    assert "shipping" in res.data["error"].lower()
+
+
+@pytest.mark.django_db
 def test_order_service_create_order_directly(test_user, test_cart, test_product):
     """Integration test OrderService.create_order — cart items become OrderItems."""
     CartItem.objects.create(cart=test_cart, product=test_product, quantity=3)
@@ -113,7 +128,7 @@ def test_order_service_create_order_invalid_user_returns_error(db):
 @pytest.mark.django_db
 def test_list_orders_filtered_by_user_and_sorted(api_client, db):
     """GET /api/orders/?user=<id> returns only that user's orders, newest first."""
-    from .factories import TelegramUserFactory, OrderFactory
+    from .factories import OrderFactory, TelegramUserFactory
 
     user_a = TelegramUserFactory(telegram_id=1001, first_name="Alice")
     user_b = TelegramUserFactory(telegram_id=1002, first_name="Bob")

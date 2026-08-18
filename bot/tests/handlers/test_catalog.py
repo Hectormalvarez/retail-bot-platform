@@ -250,6 +250,27 @@ def test_parse_product_id():
     assert parse_product_id("qty_up_10_3") == 3
 
 
+def test_parse_product_id_malformed_returns_none():
+    """Malformed callback data returns None instead of crashing."""
+    result = parse_product_id("view_prod_abc")
+    assert result is None
+
+
+def test_parse_product_id_too_short_returns_none():
+    """Callback data with too few segments returns None instead of IndexError."""
+    result = parse_product_id("view")
+    assert result is None
+
+
+def test_render_product_card_with_none_product():
+    """render_product_card gracefully handles a None product."""
+    from handlers.catalog import render_product_card
+
+    text, keyboard = render_product_card(None)
+    assert "not be found" in text
+    assert keyboard == []
+
+
 # ---- handlers that need app.bot_data["ctx"] ------------------------------
 
 
