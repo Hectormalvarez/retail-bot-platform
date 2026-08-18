@@ -283,6 +283,26 @@ def test_cart_add_existing_item_increments():
     cart_repo.add_item.assert_not_called()
 
 
+def test_cart_add_existing_item_bulk_increment_is_o1():
+    """Adding quantity > 1 to an existing cart item uses a single bulk update."""
+    mock_user = MagicMock()
+    mock_cart = MagicMock()
+    mock_existing = MagicMock()
+
+    user_repo = Mock(spec=DjangoUserRepo)
+    user_repo.get_by_telegram.return_value = mock_user
+    cart_repo = Mock(spec=DjangoCartRepo)
+    cart_repo.get_or_create.return_value = mock_cart
+    cart_repo.find_item.return_value = mock_existing
+
+    service = _make_cart_service({"user_repo": user_repo, "cart_repo": cart_repo})
+    result = service.add_or_increment(1, 42, quantity=5000)
+
+    assert result is mock_existing
+    cart_repo.increment_item_by.assert_called_once_with(mock_existing, 5000)
+    cart_repo.increment_item.assert_not_called()
+
+
 def test_cart_add_invalid_user_returns_none():
     """Adding with non-existent user -> returns None."""
     user_repo = Mock(spec=DjangoUserRepo)
