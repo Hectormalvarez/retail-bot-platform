@@ -12,7 +12,6 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 import os
 import sys
-
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -30,6 +29,9 @@ DEBUG = True
 
 ALLOWED_HOSTS = ["api", "localhost"]
 
+# Shared secret for bot-to-API authentication.
+API_KEY = os.getenv("API_KEY", "dev-secret-key")
+
 
 # Application definition
 
@@ -46,6 +48,9 @@ INSTALLED_APPS = [
 ]
 
 REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "store.authentication.APIKeyAuthentication",
+    ],
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
     ],
@@ -84,7 +89,7 @@ WSGI_APPLICATION = "core.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-# Dynamic database routing: use SQLite for testing environments, Postgres for runtime mesh
+# SQLite for tests, Postgres for runtime mesh
 if "test" in sys.argv or "pytest" in sys.modules:
     DATABASES = {
         "default": {
@@ -110,7 +115,7 @@ else:
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",  # noqa: E501
     },
     {
         "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",

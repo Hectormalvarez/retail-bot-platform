@@ -65,7 +65,7 @@ def build_app(config: BotConfig | None = None) -> Application:
     # Inject shared context so handlers never import a concrete class.
     ctx = BotContext(
         config=config,
-        api=HttpApiClient(base_url=config.api_base_url),
+        api=HttpApiClient(base_url=config.api_base_url, api_key=config.api_key),
     )
     app.bot_data["ctx"] = ctx
 

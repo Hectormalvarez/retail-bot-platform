@@ -1,5 +1,7 @@
 import pytest
+from django.conf import settings
 from rest_framework.test import APIClient
+
 from .factories import (
     CartFactory,
     CartItemFactory,
@@ -13,7 +15,8 @@ from .factories import (
 
 @pytest.fixture
 def api_client():
-    return APIClient()
+    client = APIClient(HTTP_X_API_KEY=settings.API_KEY)
+    return client
 
 
 @pytest.fixture

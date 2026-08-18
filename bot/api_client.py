@@ -72,20 +72,28 @@ class ApiClient(ABC):
 class HttpApiClient(ApiClient):
     """Production client that talks to the Django REST API over httpx."""
 
-    def __init__(self, base_url: str) -> None:
+    def __init__(self, base_url: str, api_key: str = "") -> None:
         self._base_url = base_url.rstrip("/") + "/"
+        self._api_key = api_key
 
     # ---- helpers ---------------------------------------------------------
 
     def _url(self, path: str) -> str:
         return f"{self._base_url}{path.lstrip('/')}"
 
+    def _headers(self) -> dict[str, str]:
+        if self._api_key:
+            return {"X-API-Key": self._api_key}
+        return {}
+
     async def _get(
         self, path: str, **kwargs: Any
     ) -> dict[str, Any] | list[dict[str, Any]] | None:
         async with httpx.AsyncClient() as client:
             try:
-                resp = await client.get(self._url(path), **kwargs)
+                resp = await client.get(
+                    self._url(path), headers=self._headers(), **kwargs
+                )
                 resp.raise_for_status()
                 return resp.json()
             except httpx.HTTPError as exc:
@@ -97,7 +105,9 @@ class HttpApiClient(ApiClient):
     ) -> dict[str, Any] | None:
         async with httpx.AsyncClient() as client:
             try:
-                resp = await client.post(self._url(path), json=json, **kwargs)
+                resp = await client.post(
+                    self._url(path), json=json, headers=self._headers(), **kwargs
+                )
                 resp.raise_for_status()
                 return resp.json()
             except httpx.HTTPError as exc:
@@ -109,7 +119,9 @@ class HttpApiClient(ApiClient):
     ) -> dict[str, Any] | None:
         async with httpx.AsyncClient() as client:
             try:
-                resp = await client.patch(self._url(path), json=json, **kwargs)
+                resp = await client.patch(
+                    self._url(path), json=json, headers=self._headers(), **kwargs
+                )
                 resp.raise_for_status()
                 return resp.json()
             except httpx.HTTPError as exc:
@@ -119,7 +131,9 @@ class HttpApiClient(ApiClient):
     async def _delete(self, path: str, **kwargs: Any) -> bool:
         async with httpx.AsyncClient() as client:
             try:
-                resp = await client.delete(self._url(path), **kwargs)
+                resp = await client.delete(
+                    self._url(path), headers=self._headers(), **kwargs
+                )
                 resp.raise_for_status()
                 return True
             except httpx.HTTPError as exc:
@@ -350,9 +364,9 @@ class MockApiClient(ApiClient):
                 {
                     "product_name": i["product_name"],
                     "quantity": i["quantity"],
-                    "price_at_purchase": self.product_details.get(
-                        i["product"], {}
-                    ).get("price", "0.00"),
+                    "price_at_purchase": self.product_details.get(i["product"], {}).get(
+                        "price", "0.00"
+                    ),
                 }
                 for i in cart["items"]
             ],

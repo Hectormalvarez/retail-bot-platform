@@ -11,6 +11,7 @@ class BotConfig:
 
     token: str
     api_base_url: str
+    api_key: str = field(default="")
     persistence_path: str = field(default="data/bot_state.pickle")
     log_level: str = field(default="INFO")
     data_dir: Path = field(default=Path("data"))
@@ -25,6 +26,7 @@ class BotConfig:
         return cls(
             token=token,
             api_base_url=os.getenv("API_URL", "http://api:8000/api/"),
+            api_key=os.getenv("API_KEY", ""),
             persistence_path=os.getenv("BOT_PERSISTENCE_PATH", "data/bot_state.pickle"),
             log_level=os.getenv("BOT_LOG_LEVEL", "INFO"),
         )
